@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: bap-nu-sigma-qa-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app.py --server.port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+    plan: free
+    healthCheckPath: /
+    autoDeploy: true 
