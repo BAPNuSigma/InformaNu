@@ -23,7 +23,25 @@ class KnowledgeBaseHandler:
                     'markdown': content,
                     'text': markdown.markdown(content)
                 }
-    
+
+    def extract_section(self, content, section_header):
+        """Extract a specific section from the content"""
+        lines = content.split('\n')
+        section_content = []
+        in_section = False
+        
+        for line in lines:
+            if line.strip().lower().startswith(section_header.lower()):
+                in_section = True
+                section_content.append(line.strip())
+            elif in_section:
+                if line.strip() and not line.startswith('#'):
+                    section_content.append(line.strip())
+                elif line.startswith('#'):
+                    break
+        
+        return '\n'.join(section_content) if section_content else None
+
     def get_next_meeting(self):
         """Find the next meeting from the schedule based on current date"""
         schedule = self.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
@@ -33,9 +51,13 @@ class KnowledgeBaseHandler:
         current_date = datetime.now()
         next_meeting = None
         next_meeting_date = None
+        next_meeting_details = []
 
         # Parse the schedule looking for meeting dates
-        for line in schedule.split('\n'):
+        lines = schedule.split('\n')
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
             # Look for date patterns like "1/22/25" or similar
             date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{2,4})', line)
             time_match = re.search(r'(\d{1,2}:\d{2}(?:\s*[AaPp][Mm])?)', line)
@@ -44,7 +66,6 @@ class KnowledgeBaseHandler:
                 date_str = date_match.group(1)
                 time_str = time_match.group(1)
                 
-                # Convert to datetime object
                 try:
                     # Ensure 4-digit year
                     if len(date_str.split('/')[-1]) == 2:
@@ -58,18 +79,21 @@ class KnowledgeBaseHandler:
                     
                     meeting_datetime = datetime.strptime(f"{date_str} {time_str}", '%m/%d/%Y %H:%M')
                     
-                    # If this meeting is in the future and either we haven't found a next meeting yet
-                    # or this one is sooner than our current next meeting
                     if meeting_datetime > current_date and (next_meeting_date is None or meeting_datetime < next_meeting_date):
-                        next_meeting = line.strip()
+                        next_meeting_details = [line]
+                        # Gather additional details from subsequent lines
+                        j = i + 1
+                        while j < len(lines) and (lines[j].strip().startswith('-') or lines[j].strip().startswith('  ')):
+                            next_meeting_details.append(lines[j].strip())
+                            j += 1
                         next_meeting_date = meeting_datetime
                 except ValueError:
-                    continue
+                    pass
+            i += 1
 
-        if next_meeting:
-            # Clean up the meeting information
-            next_meeting = re.sub(r'[*-]', '', next_meeting).strip()
-            return f"Our next meeting is {next_meeting}"
+        if next_meeting_details:
+            # Format the meeting information nicely
+            return "\n".join(next_meeting_details)
         else:
             return "I couldn't find any upcoming meetings in the schedule."
 
@@ -79,46 +103,97 @@ class KnowledgeBaseHandler:
         if not requirements:
             return "I couldn't find the GPA requirements."
         
-        # Look for GPA requirements section
-        gpa_section = None
-        for line in requirements.split('\n'):
-            if 'GPA Requirements:' in line:
-                gpa_section = line
-                # Get the next lines that are part of the GPA requirements
-                lines = []
-                for next_line in requirements.split('\n')[requirements.split('\n').index(line)+1:]:
-                    if next_line.strip() and next_line.startswith('  -'):
-                        lines.append(next_line.strip())
-                    elif not next_line.startswith('  ') and next_line.strip():
-                        break
-                if lines:
-                    return "\n".join(lines).replace('  - ', '')
-        
+        gpa_section = self.extract_section(requirements, "GPA Requirements:")
+        if gpa_section:
+            return gpa_section
         return "I couldn't find the specific GPA requirements."
-    
+
+    def get_attendance_requirements(self):
+        """Get the specific attendance requirements"""
+        requirements = self.knowledge_base.get('member_requirements', {}).get('markdown', '')
+        if not requirements:
+            return "I couldn't find the attendance requirements."
+        
+        attendance_section = self.extract_section(requirements, "Attendance Requirements")
+        if attendance_section:
+            return attendance_section
+        return "I couldn't find the specific attendance requirements."
+
+    def get_membership_checklist(self):
+        """Get the specific membership checklist"""
+        requirements = self.knowledge_base.get('member_requirements', {}).get('markdown', '')
+        if not requirements:
+            return "I couldn't find the membership checklist."
+        
+        checklist_section = self.extract_section(requirements, "Member Checklist")
+        if checklist_section:
+            return checklist_section
+        return "I couldn't find the specific membership checklist."
+
+    def get_reflection_papers_policy(self):
+        """Get the specific reflection papers policy"""
+        requirements = self.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if not requirements:
+            return "I couldn't find the reflection papers policy."
+        
+        policy_section = self.extract_section(requirements, "Reflection Papers Policy")
+        if policy_section:
+            return policy_section
+        return "I couldn't find the specific reflection papers policy."
+
+    def get_tutoring_schedule(self):
+        """Get the specific tutoring schedule"""
+        requirements = self.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if not requirements:
+            return "I couldn't find the tutoring schedule."
+        
+        schedule_section = self.extract_section(requirements, "Tutoring Schedule")
+        if schedule_section:
+            return schedule_section
+        return "I couldn't find the specific tutoring schedule."
+
     def search_knowledge_base(self, query):
-        """Enhanced search implementation"""
+        """Enhanced search implementation with specific handlers for common queries"""
         query = query.lower()
         
         # Special handling for common queries
-        if 'next meeting' in query or 'when' in query and 'meeting' in query:
+        if 'next meeting' in query or ('when' in query and 'meeting' in query):
             return [{'content': self.get_next_meeting(), 'relevance': 1.0}]
         elif 'gpa' in query and ('requirement' in query or 'need' in query or 'join' in query):
             return [{'content': self.get_gpa_requirement(), 'relevance': 1.0}]
+        elif 'attendance' in query and 'requirement' in query:
+            return [{'content': self.get_attendance_requirements(), 'relevance': 1.0}]
+        elif 'checklist' in query:
+            return [{'content': self.get_membership_checklist(), 'relevance': 1.0}]
+        elif 'reflection' in query and 'paper' in query:
+            return [{'content': self.get_reflection_papers_policy(), 'relevance': 1.0}]
+        elif 'tutoring' in query and 'schedule' in query:
+            return [{'content': self.get_tutoring_schedule(), 'relevance': 1.0}]
         
-        # Default search behavior
+        # Default search behavior for other queries
         matches = []
         for topic, content in self.knowledge_base.items():
             text = content['text'].lower()
             if query in text:
-                paragraphs = text.split('\n\n')
-                for para in paragraphs:
-                    if query in para.lower():
-                        matches.append({
-                            'topic': topic,
-                            'content': para,
-                            'relevance': len(query) / len(para)
-                        })
+                # Find the most relevant section
+                best_section = None
+                best_relevance = 0
+                
+                sections = text.split('\n\n')
+                for section in sections:
+                    if query in section.lower():
+                        # Calculate relevance score based on query term frequency and section length
+                        relevance = section.lower().count(query) / len(section)
+                        if relevance > best_relevance:
+                            best_section = section
+                            best_relevance = relevance
+                
+                if best_section:
+                    matches.append({
+                        'topic': topic,
+                        'content': best_section,
+                        'relevance': best_relevance
+                    })
         
         matches.sort(key=lambda x: x['relevance'], reverse=True)
         return matches
