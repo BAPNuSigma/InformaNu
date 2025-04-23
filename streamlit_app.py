@@ -79,13 +79,14 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     else:
         # If no direct match found, use OpenAI to generate a response
         client = OpenAI()
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant for Beta Alpha Psi: Nu Sigma Chapter. If you don't know the specific answer from the knowledge base, politely say so and suggest contacting chapter leadership for the most accurate information."}
+        ]
+        messages.extend([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
+        
         stream = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant for Beta Alpha Psi: Nu Sigma Chapter. If you don't know the specific answer from the knowledge base, politely say so and suggest contacting chapter leadership for the most accurate information."},
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
+            messages=messages,
             stream=True,
         )
         
