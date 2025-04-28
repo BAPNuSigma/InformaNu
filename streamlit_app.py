@@ -1,6 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 from knowledge_base_handler import KnowledgeBaseHandler
+from datetime import datetime, timedelta
 
 # Initialize knowledge base handler
 kb_handler = KnowledgeBaseHandler()
@@ -21,6 +22,49 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+def find_meeting_details(schedule, target_date, look_for_next=True):
+    """Find meeting details for a specific date or next/current meeting"""
+    meetings = []
+    current_meeting = None
+    lines = schedule.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if '**' in line and '/' in line:  # Look for date entries
+            try:
+                date_str = line.split('**')[1].split('-')[0].strip()
+                if '/' in date_str:
+                    date_parts = date_str.split('/')
+                    if len(date_parts) == 3:
+                        meeting_date = datetime.strptime(date_str, '%m/%d/%y')
+                        meeting_details = [line]
+                        # Get additional details
+                        j = i + 1
+                        while j < len(lines) and (lines[j].strip().startswith('-') or lines[j].strip().startswith('  ')):
+                            meeting_details.append(lines[j].strip())
+                            j += 1
+                        meetings.append((meeting_date, meeting_details))
+            except Exception:
+                pass
+        i += 1
+    
+    if not meetings:
+        return None
+        
+    if look_for_next:
+        # Find the next meeting after target_date
+        future_meetings = [(date, details) for date, details in meetings if date > target_date]
+        if future_meetings:
+            return '\n'.join(future_meetings[0][1])
+    else:
+        # Find the meeting closest to target_date
+        closest_meeting = min(meetings, key=lambda x: abs((x[0] - target_date).days))
+        # Only return if it's within 3 days of target_date
+        if abs((closest_meeting[0] - target_date).days) <= 3:
+            return '\n'.join(closest_meeting[1])
+    
+    return None
+
 # Create a chat input field
 if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapter"):
     # Store and display the current prompt
@@ -32,43 +76,23 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     response = None
     query = prompt.lower()
     
-    if 'next meeting' in query or ('when' in query and 'meeting' in query):
-        response = kb_handler.get_next_meeting()
-        if not response or "couldn't find" in response.lower():
-            # Fallback to searching in the schedule
-            schedule = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
-            if schedule:
-                from datetime import datetime
-                current_date = datetime.now()
-                next_meeting = None
-                next_meeting_date = None
-                
-                for line in schedule.split('\n'):
-                    if '**' in line and '/' in line:  # Look for date entries
-                        try:
-                            date_str = line.split('**')[1].split('-')[0].strip()
-                            if '/' in date_str:
-                                date_parts = date_str.split('/')
-                                if len(date_parts) == 3:
-                                    meeting_date = datetime.strptime(date_str, '%m/%d/%y')
-                                    if meeting_date > current_date:
-                                        next_meeting = line
-                                        next_meeting_date = meeting_date
-                                        break
-                        except Exception:
-                            continue
-                
-                if next_meeting:
-                    response = f"The next meeting is:\n{next_meeting}"
-                    # Get additional details
-                    lines = schedule.split('\n')
-                    for i, line in enumerate(lines):
-                        if next_meeting in line:
-                            j = i + 1
-                            while j < len(lines) and (lines[j].strip().startswith('-') or lines[j].strip().startswith('  ')):
-                                response += f"\n{lines[j].strip()}"
-                                j += 1
-                            break
+    if any(phrase in query for phrase in ['next meeting', 'when' in query and 'meeting' in query]):
+        schedule = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
+        if schedule:
+            response = find_meeting_details(schedule, datetime.now(), look_for_next=True)
+            if response:
+                response = "The next meeting is:\n" + response
+            else:
+                response = "I couldn't find any upcoming meetings in the schedule."
+    
+    elif any(phrase in query for phrase in ["today's meeting", "this week's meeting", "current meeting"]):
+        schedule = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
+        if schedule:
+            response = find_meeting_details(schedule, datetime.now(), look_for_next=False)
+            if response:
+                response = "This week's meeting is:\n" + response
+            else:
+                response = "I couldn't find a meeting scheduled for this week. The schedule might need to be updated, or there might not be a meeting this week. Please check the official chapter communication channels for the most up-to-date information."
 
     elif 'candidate' in query and 'requirement' in query:
         # Get both eligibility and requirements sections
@@ -128,31 +152,50 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     if not response:
         # Search the knowledge base for relevant information
         matches = kb_handler.search_knowledge_base(query)
+        relevant_context = ""
+        
+        # Combine multiple relevant matches if available
         if matches:
-            response = matches[0]['content']
-    
-    if response:
-        # Clean up the response
-        response = response.strip()
-        # Display the response
-        with st.chat_message("assistant"):
-            st.markdown(response)
-        # Store the response
-        st.session_state.messages.append({"role": "assistant", "content": response})
-    else:
-        # If no direct match found, use OpenAI to generate a response
-        client = OpenAI()
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant for Beta Alpha Psi: Nu Sigma Chapter. If you don't know the specific answer from the knowledge base, politely say so and suggest contacting chapter leadership for the most accurate information."}
-        ]
-        messages.extend([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
+            relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
         
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
-        )
-        
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        # If we have matches or this is a follow-up question, use the LLM
+        if relevant_context or len(st.session_state.messages) > 0:
+            # Create a comprehensive system prompt
+            system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. 
+            Your primary role is to provide accurate information about chapter requirements, events, and policies.
+            
+            When responding:
+            1. Always prioritize information from the provided knowledge base
+            2. Be clear and specific about requirements and deadlines
+            3. If you're unsure about specific details, acknowledge this and suggest contacting chapter leadership
+            4. Maintain a professional but friendly tone
+            5. For time-sensitive information (like meeting times or deadlines), remind users to verify through official channels
+            
+            Here is the relevant information from our knowledge base:
+            
+            {relevant_context}
+            """
+            
+            client = OpenAI()
+            messages = [
+                {"role": "system", "content": system_prompt.format(relevant_context=relevant_context)}
+            ]
+            # Add previous conversation context
+            messages.extend([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
+            
+            stream = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                temperature=0.7,
+                stream=True,
+            )
+            
+            with st.chat_message("assistant"):
+                response = st.write_stream(stream)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        else:
+            # No relevant information found
+            with st.chat_message("assistant"):
+                response = ("I apologize, but I couldn't find specific information about that in my knowledge base. "
+                          "For the most accurate and up-to-date information, please contact chapter leadership directly.")
+            st.session_state.messages.append({"role": "assistant", "content": response})
