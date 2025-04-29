@@ -223,18 +223,39 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             if section:
                 response = '\n'.join(section)
 
+    elif any(phrase in query.lower() for phrase in ['meeting requirement', 'meeting requirements']) and 'candidate' in query.lower():
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if content:
+            sections = []
+            current_section = []
+            in_section = False
+            
+            for line in content.split('\n'):
+                if '### Meeting Requirements for BAP Candidates' in line:
+                    current_section = [line]
+                    in_section = True
+                elif in_section and line.startswith('###'):
+                    sections.append('\n'.join(current_section))
+                    current_section = []
+                    in_section = False
+                elif in_section:
+                    current_section.append(line)
+            
+            if current_section:
+                sections.append('\n'.join(current_section))
+            
+            if sections:
+                response = '\n\n'.join(sections)
+
+    # If no direct response was found, search the knowledge base
     if not response:
-        # Search the knowledge base for relevant information
         matches = kb_handler.search_knowledge_base(query)
         relevant_context = ""
         
-        # Combine multiple relevant matches if available
         if matches:
             relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
         
-        # If we have matches or this is a follow-up question, use the LLM
         if relevant_context or len(st.session_state.messages) > 0:
-            # Create a comprehensive system prompt
             system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. 
             Your primary role is to provide accurate information about chapter requirements, events, and policies.
             
@@ -254,7 +275,6 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             messages = [
                 {"role": "system", "content": system_prompt.format(relevant_context=relevant_context)}
             ]
-            # Add previous conversation context
             messages.extend([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
             
             stream = client.chat.completions.create(
@@ -266,10 +286,11 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             
             with st.chat_message("assistant"):
                 response = st.write_stream(stream)
-            st.session_state.messages.append({"role": "assistant", "content": response})
         else:
-            # No relevant information found
-            with st.chat_message("assistant"):
-                response = ("I apologize, but I couldn't find specific information about that in my knowledge base. "
-                          "For the most accurate and up-to-date information, please contact chapter leadership directly.")
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            response = ("I apologize, but I couldn't find specific information about that in my knowledge base. "
+                      "For the most accurate and up-to-date information, please contact chapter leadership directly.")
+
+    # Display the response
+    with st.chat_message("assistant"):
+        st.markdown(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
