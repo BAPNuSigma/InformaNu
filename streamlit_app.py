@@ -109,7 +109,33 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                     current_section = [line]
                     in_section = True
                 elif in_section and line.startswith('##'):
-                    sections.append('\n'.join(current_section))
+                    if current_section:
+                        sections.append('\n'.join(current_section))
+                    current_section = []
+                    in_section = False
+                elif in_section:
+                    current_section.append(line)
+            
+            if current_section:
+                sections.append('\n'.join(current_section))
+            
+            response = '\n\n'.join(sections)
+
+    elif 'member' in query and 'requirement' in query:
+        # Get member requirements
+        content = kb_handler.knowledge_base.get('member_requirements', {}).get('markdown', '')
+        if content:
+            sections = []
+            current_section = []
+            in_section = False
+            
+            for line in content.split('\n'):
+                if '## Member Requirements' in line:
+                    current_section = [line]
+                    in_section = True
+                elif in_section and line.startswith('##'):
+                    if current_section:
+                        sections.append('\n'.join(current_section))
                     current_section = []
                     in_section = False
                 elif in_section:
