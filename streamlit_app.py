@@ -76,7 +76,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     response = None
     query = prompt.lower()
     
-    if any(phrase in query for phrase in ['next meeting', 'when' in query and 'meeting' in query]):
+    if 'next meeting' in query or ('when' in query and 'meeting' in query):
         schedule = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
         if schedule:
             response = find_meeting_details(schedule, datetime.now(), look_for_next=True)
