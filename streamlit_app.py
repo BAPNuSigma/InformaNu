@@ -175,6 +175,54 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     elif 'tutoring' in query and 'schedule' in query:
         response = kb_handler.get_tutoring_schedule()
     
+    elif any(phrase in query.lower() for phrase in ['types of membership', 'membership types']):
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if content:
+            section = []
+            in_section = False
+            for line in content.split('\n'):
+                if '## Types of Membership' in line:
+                    section = [line]
+                    in_section = True
+                elif in_section and line.startswith('##'):
+                    break
+                elif in_section:
+                    section.append(line)
+            if section:
+                response = '\n'.join(section)
+
+    elif 'eligibility' in query.lower():
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if content:
+            section = []
+            in_section = False
+            for line in content.split('\n'):
+                if '## Candidate Eligibility' in line:
+                    section = [line]
+                    in_section = True
+                elif in_section and line.startswith('##'):
+                    break
+                elif in_section:
+                    section.append(line)
+            if section:
+                response = '\n'.join(section)
+
+    elif 'academic requirement' in query.lower():
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if content:
+            section = []
+            in_section = False
+            for line in content.split('\n'):
+                if '### Academic Requirements' in line:
+                    section = [line]
+                    in_section = True
+                elif in_section and (line.startswith('##') or line.startswith('### ')):
+                    break
+                elif in_section:
+                    section.append(line)
+            if section:
+                response = '\n'.join(section)
+
     if not response:
         # Search the knowledge base for relevant information
         matches = kb_handler.search_knowledge_base(query)
