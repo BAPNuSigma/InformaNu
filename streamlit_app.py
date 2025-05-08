@@ -2,6 +2,7 @@ import streamlit as st
 from openai import OpenAI
 from knowledge_base_handler import KnowledgeBaseHandler
 from datetime import datetime, timedelta
+import re
 
 # Initialize knowledge base handler
 kb_handler = KnowledgeBaseHandler()
@@ -65,6 +66,40 @@ def find_meeting_details(schedule, target_date, look_for_next=True):
     
     return None
 
+def extract_section(content, header):
+    lines = content.split('\n')
+    section = []
+    in_section = False
+    for line in lines:
+        if line.strip().startswith(header):
+            in_section = True
+            section.append(line)
+        elif in_section and (line.startswith('##') or line.startswith('#')):
+            break
+        elif in_section:
+            section.append(line)
+    return '\n'.join(section) if section else None
+
+def extract_meetings_by_month(content, month):
+    # month: int (1=Jan, 2=Feb, ...)
+    lines = content.split('\n')
+    meetings = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        date_match = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', line)
+        if date_match:
+            m = int(date_match.group(1))
+            if m == month:
+                meeting_block = [line]
+                j = i + 1
+                while j < len(lines) and (lines[j].strip().startswith('-') or lines[j].strip().startswith('  ')):
+                    meeting_block.append(lines[j])
+                    j += 1
+                meetings.append('\n'.join(meeting_block))
+        i += 1
+    return '\n\n'.join(meetings) if meetings else None
+
 # Create a chat input field
 if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapter"):
     # Store and display the current prompt
@@ -95,49 +130,98 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                 response = "I couldn't find a meeting scheduled for this week. The schedule might need to be updated, or there might not be a meeting this week. Please check the official chapter communication channels for the most up-to-date information."
 
     strict_kb_answered = False
+    # Strict knowledge base answering for requirements/eligibility
     if 'member' in query.lower() and 'requirement' in query.lower():
         content = kb_handler.knowledge_base.get('member_requirements', {}).get('markdown', '')
-        if content:
-            section = []
-            in_section = False
-            for line in content.split('\n'):
-                if '## Member Requirements' in line:
-                    section = [line]
-                    in_section = True
-                elif in_section and line.startswith('##'):
-                    break
-                elif in_section:
-                    section.append(line)
-            if section:
-                response = '\n'.join(section)
-            else:
-                response = "I couldn't find the member requirements in our knowledge base. Please contact chapter leadership."
-        else:
+        response = extract_section(content, '## Member Requirements') if content else None
+        if not response:
             response = "I couldn't find the member requirements in our knowledge base. Please contact chapter leadership."
         strict_kb_answered = True
 
     elif 'candidate' in query.lower() and 'requirement' in query.lower():
         content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
-        if content:
-            section = []
-            in_section = False
-            for line in content.split('\n'):
-                if '## Candidate Eligibility' in line or '## Candidacy Requirements' in line:
-                    if section:
-                        section.append('')
-                    section.append(line)
-                    in_section = True
-                elif in_section and line.startswith('##'):
-                    in_section = False
-                elif in_section:
-                    section.append(line)
-            if section:
-                response = '\n'.join(section)
-            else:
-                response = "I couldn't find the candidacy requirements in our knowledge base. Please contact chapter leadership."
-        else:
+        eligibility = extract_section(content, '## Candidate Eligibility') if content else None
+        candidacy = extract_section(content, '## Candidacy Requirements') if content else None
+        response = ''
+        if eligibility:
+            response += eligibility + '\n\n'
+        if candidacy:
+            response += candidacy
+        if not response.strip():
             response = "I couldn't find the candidacy requirements in our knowledge base. Please contact chapter leadership."
         strict_kb_answered = True
+
+    elif 'eligibility' in query.lower():
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        response = extract_section(content, '## Candidate Eligibility') if content else None
+        if not response:
+            response = "I couldn't find the candidate eligibility in our knowledge base. Please contact chapter leadership."
+        strict_kb_answered = True
+
+    elif 'academic requirement' in query.lower():
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        response = extract_section(content, '### Academic Requirements') if content else None
+        if not response:
+            response = "I couldn't find the academic requirements in our knowledge base. Please contact chapter leadership."
+        strict_kb_answered = True
+
+    # Strict knowledge base answering for meeting schedule by month
+    month_map = {'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6, 'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12}
+    for month_name, month_num in month_map.items():
+        if month_name in query.lower():
+            content = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
+            response = extract_meetings_by_month(content, month_num) if content else None
+            if not response:
+                response = f"I couldn't find any meetings for {month_name.capitalize()} in our knowledge base. Please contact chapter leadership."
+            strict_kb_answered = True
+            break
+
+    # Strict knowledge base answering for full meeting schedule
+    if 'meeting schedule' in query.lower() or 'schedule for this semester' in query.lower():
+        content = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
+        if content:
+            response = extract_section(content, '# Spring 2025 Meeting Schedule')
+        if not response:
+            response = "I couldn't find the meeting schedule in our knowledge base. Please contact chapter leadership."
+        strict_kb_answered = True
+
+    # Display the response if strict KB answer was given
+    if strict_kb_answered:
+        with st.chat_message("assistant"):
+            st.markdown(response.strip())
+        st.session_state.messages.append({"role": "assistant", "content": response.strip()})
+    elif not response:
+        matches = kb_handler.search_knowledge_base(query)
+        relevant_context = ""
+        if matches:
+            relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
+        if relevant_context or len(st.session_state.messages) > 0:
+            system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. \nYour primary role is to provide accurate information about chapter requirements, events, and policies.\n\nWhen responding:\n1. Always prioritize information from the provided knowledge base\n2. Be clear and specific about requirements and deadlines\n3. If you're unsure about specific details, acknowledge this and suggest contacting chapter leadership\n4. Maintain a professional but friendly tone\n5. For time-sensitive information (like meeting times or deadlines), remind users to verify through official channels\n\nHere is the relevant information from our knowledge base:\n\n{relevant_context}\n"""
+            client = OpenAI()
+            last_msgs = []
+            if len(st.session_state.messages) >= 2:
+                last_msgs = st.session_state.messages[-2:]
+            else:
+                last_msgs = st.session_state.messages[-1:]
+            messages = [
+                {"role": "system", "content": system_prompt.format(relevant_context=relevant_context)}
+            ]
+            messages.extend([{"role": m["role"], "content": m["content"]} for m in last_msgs])
+            stream = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                temperature=0.7,
+                stream=True,
+            )
+            with st.chat_message("assistant"):
+                response = st.write_stream(stream)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        else:
+            with st.chat_message("assistant"):
+                response = ("I apologize, but I couldn't find specific information about that in my knowledge base. "
+                          "For the most accurate and up-to-date information, please contact chapter leadership directly.")
+                st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
     elif 'gpa' in query and ('requirement' in query or 'need' in query or 'join' in query):
         response = kb_handler.get_gpa_requirement()
@@ -178,38 +262,6 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                     section = [line]
                     in_section = True
                 elif in_section and line.startswith('##'):
-                    break
-                elif in_section:
-                    section.append(line)
-            if section:
-                response = '\n'.join(section)
-
-    elif 'eligibility' in query.lower():
-        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
-        if content:
-            section = []
-            in_section = False
-            for line in content.split('\n'):
-                if '## Candidate Eligibility' in line:
-                    section = [line]
-                    in_section = True
-                elif in_section and line.startswith('##'):
-                    break
-                elif in_section:
-                    section.append(line)
-            if section:
-                response = '\n'.join(section)
-
-    elif 'academic requirement' in query.lower():
-        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
-        if content:
-            section = []
-            in_section = False
-            for line in content.split('\n'):
-                if '### Academic Requirements' in line:
-                    section = [line]
-                    in_section = True
-                elif in_section and (line.startswith('##') or line.startswith('### ')):
                     break
                 elif in_section:
                     section.append(line)
@@ -288,7 +340,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
         with st.chat_message("assistant"):
             st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
-    elif not response and not strict_kb_answered:
+    elif not response:
         matches = kb_handler.search_knowledge_base(query)
         relevant_context = ""
         if matches:
