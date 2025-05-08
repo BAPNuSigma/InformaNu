@@ -94,57 +94,50 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             else:
                 response = "I couldn't find a meeting scheduled for this week. The schedule might need to be updated, or there might not be a meeting this week. Please check the official chapter communication channels for the most up-to-date information."
 
-    elif 'candidate' in query and 'requirement' in query:
-        # Get both eligibility and requirements sections
-        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
-        if content:
-            sections = []
-            current_section = []
-            in_section = False
-            
-            for line in content.split('\n'):
-                if '## Candidate Eligibility' in line or '## Candidacy Requirements' in line:
-                    if current_section:
-                        sections.append('\n'.join(current_section))
-                    current_section = [line]
-                    in_section = True
-                elif in_section and line.startswith('##'):
-                    if current_section:
-                        sections.append('\n'.join(current_section))
-                    current_section = []
-                    in_section = False
-                elif in_section:
-                    current_section.append(line)
-            
-            if current_section:
-                sections.append('\n'.join(current_section))
-            
-            response = '\n\n'.join(sections)
-
-    elif 'member' in query and 'requirement' in query:
-        # Get member requirements
+    strict_kb_answered = False
+    if 'member' in query.lower() and 'requirement' in query.lower():
         content = kb_handler.knowledge_base.get('member_requirements', {}).get('markdown', '')
         if content:
-            sections = []
-            current_section = []
+            section = []
             in_section = False
-            
             for line in content.split('\n'):
                 if '## Member Requirements' in line:
-                    current_section = [line]
+                    section = [line]
                     in_section = True
                 elif in_section and line.startswith('##'):
-                    if current_section:
-                        sections.append('\n'.join(current_section))
-                    current_section = []
+                    break
+                elif in_section:
+                    section.append(line)
+            if section:
+                response = '\n'.join(section)
+            else:
+                response = "I couldn't find the member requirements in our knowledge base. Please contact chapter leadership."
+        else:
+            response = "I couldn't find the member requirements in our knowledge base. Please contact chapter leadership."
+        strict_kb_answered = True
+
+    elif 'candidate' in query.lower() and 'requirement' in query.lower():
+        content = kb_handler.knowledge_base.get('membership_types_and_requirements', {}).get('markdown', '')
+        if content:
+            section = []
+            in_section = False
+            for line in content.split('\n'):
+                if '## Candidate Eligibility' in line or '## Candidacy Requirements' in line:
+                    if section:
+                        section.append('')
+                    section.append(line)
+                    in_section = True
+                elif in_section and line.startswith('##'):
                     in_section = False
                 elif in_section:
-                    current_section.append(line)
-            
-            if current_section:
-                sections.append('\n'.join(current_section))
-            
-            response = '\n\n'.join(sections)
+                    section.append(line)
+            if section:
+                response = '\n'.join(section)
+            else:
+                response = "I couldn't find the candidacy requirements in our knowledge base. Please contact chapter leadership."
+        else:
+            response = "I couldn't find the candidacy requirements in our knowledge base. Please contact chapter leadership."
+        strict_kb_answered = True
 
     elif 'gpa' in query and ('requirement' in query or 'need' in query or 'join' in query):
         response = kb_handler.get_gpa_requirement()
@@ -291,6 +284,47 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                       "For the most accurate and up-to-date information, please contact chapter leadership directly.")
 
     # Display the response
-    with st.chat_message("assistant"):
-        st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    if response:
+        with st.chat_message("assistant"):
+            st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+    elif not response and not strict_kb_answered:
+        matches = kb_handler.search_knowledge_base(query)
+        relevant_context = ""
+        if matches:
+            relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
+        if relevant_context or len(st.session_state.messages) > 0:
+            system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. 
+            Your primary role is to provide accurate information about chapter requirements, events, and policies.
+            
+            When responding:
+            1. Always prioritize information from the provided knowledge base
+            2. Be clear and specific about requirements and deadlines
+            3. If you're unsure about specific details, acknowledge this and suggest contacting chapter leadership
+            4. Maintain a professional but friendly tone
+            5. For time-sensitive information (like meeting times or deadlines), remind users to verify through official channels
+            
+            Here is the relevant information from our knowledge base:
+            
+            {relevant_context}
+            """
+            client = OpenAI()
+            messages = [
+                {"role": "system", "content": system_prompt.format(relevant_context=relevant_context)}
+            ]
+            messages.extend([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
+            stream = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                temperature=0.7,
+                stream=True,
+            )
+            with st.chat_message("assistant"):
+                response = st.write_stream(stream)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        else:
+            with st.chat_message("assistant"):
+                response = ("I apologize, but I couldn't find specific information about that in my knowledge base. "
+                          "For the most accurate and up-to-date information, please contact chapter leadership directly.")
+                st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
