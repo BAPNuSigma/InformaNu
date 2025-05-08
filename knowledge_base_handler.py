@@ -3,6 +3,8 @@ import markdown
 from pathlib import Path
 from datetime import datetime
 import re
+from docx import Document
+import openpyxl
 
 class KnowledgeBaseHandler:
     def __init__(self, knowledge_base_dir="knowledge_base"):
@@ -11,17 +13,38 @@ class KnowledgeBaseHandler:
         self.load_knowledge_base()
     
     def load_knowledge_base(self):
-        """Load all markdown files from the knowledge base directory"""
+        """Load all supported files from the knowledge base directory"""
         if not os.path.exists(self.knowledge_base_dir):
             raise FileNotFoundError(f"Knowledge base directory {self.knowledge_base_dir} not found")
         
-        for file_path in Path(self.knowledge_base_dir).glob("*.md"):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                # Store both markdown and plain text versions
+        for file_path in Path(self.knowledge_base_dir).glob("*"):
+            if file_path.suffix == ".md":
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    self.knowledge_base[file_path.stem] = {
+                        'markdown': content,
+                        'text': markdown.markdown(content)
+                    }
+            elif file_path.suffix == ".docx":
+                doc = Document(file_path)
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                content = '\n'.join(paragraphs)
                 self.knowledge_base[file_path.stem] = {
                     'markdown': content,
-                    'text': markdown.markdown(content)
+                    'text': content
+                }
+            elif file_path.suffix == ".xlsx":
+                wb = openpyxl.load_workbook(file_path)
+                all_text = []
+                for sheet in wb.worksheets:
+                    for row in sheet.iter_rows(values_only=True):
+                        row_text = [str(cell) for cell in row if cell is not None]
+                        if row_text:
+                            all_text.append(' | '.join(row_text))
+                content = '\n'.join(all_text)
+                self.knowledge_base[file_path.stem] = {
+                    'markdown': content,
+                    'text': content
                 }
 
     def extract_section(self, content, section_header):
