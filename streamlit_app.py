@@ -222,7 +222,22 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             if matches:
                 relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
             if relevant_context or len(st.session_state.messages) > 0:
-                system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. \nYour primary role is to provide accurate information about chapter requirements, events, and policies.\n\nWhen responding:\n1. Always prioritize information from the provided knowledge base\n2. Be clear and specific about requirements and deadlines\n3. If you're unsure about specific details, acknowledge this and suggest contacting chapter leadership\n4. Maintain a professional but friendly tone\n5. For time-sensitive information (like meeting times or deadlines), remind users to verify through official channels\n\nHere is the relevant information from our knowledge base:\n\n{relevant_context}\n"""
+                system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. 
+Your primary role is to provide accurate information about chapter requirements, events, and policies.
+
+IMPORTANT RULES:
+1. ONLY use information from the provided knowledge base
+2. If the information is not in the knowledge base, say "I don't have that information in my knowledge base. Please contact chapter leadership."
+3. DO NOT make assumptions or provide information not explicitly stated in the knowledge base
+4. For requirements and schedule questions, ONLY use the exact content from the knowledge base
+5. Be clear and specific about requirements and deadlines
+6. Maintain a professional but friendly tone
+7. For time-sensitive information, remind users to verify through official channels
+
+Here is the relevant information from our knowledge base:
+
+{relevant_context}
+"""
                 client = OpenAI()
                 last_msgs = []
                 if len(st.session_state.messages) >= 2:
@@ -234,9 +249,9 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                 ]
                 messages.extend([{"role": m["role"], "content": m["content"]} for m in last_msgs])
                 stream = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4",  # Changed to GPT-4 for better accuracy
                     messages=messages,
-                    temperature=0.7,
+                    temperature=0.3,  # Lowered temperature for more deterministic responses
                     stream=True,
                 )
                 with st.chat_message("assistant"):
