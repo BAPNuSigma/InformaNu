@@ -309,10 +309,17 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             {relevant_context}
             """
             client = OpenAI()
+            # Only include the latest user message (and optionally the last assistant message)
+            last_msgs = []
+            if len(st.session_state.messages) >= 2:
+                # Last assistant and last user
+                last_msgs = st.session_state.messages[-2:]
+            else:
+                last_msgs = st.session_state.messages[-1:]
             messages = [
                 {"role": "system", "content": system_prompt.format(relevant_context=relevant_context)}
             ]
-            messages.extend([{"role": m["role"], "content": m["content"]} for m in st.session_state.messages])
+            messages.extend([{"role": m["role"], "content": m["content"]} for m in last_msgs])
             stream = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
