@@ -75,21 +75,25 @@ def find_meeting_details(schedule, target_date, look_for_next=True):
     return None
 
 def extract_section(content, header):
+    # Try both Markdown and plain text headers
+    header_plain = header.lstrip('#').strip()
     lines = content.split('\n')
     section = []
     in_section = False
-    header_level = header.count('#')
+    header_level = header.count('#') if header.startswith('#') else 2  # Default to 2 if not markdown
     for line in lines:
-        if line.strip().startswith(header):
+        # Match either markdown or plain text header
+        if line.strip().startswith(header) or line.strip().lower() == header_plain.lower():
             in_section = True
-            continue  # Don't include the header itself
+            continue
         if in_section:
-            # Stop at the next header of the same or higher level (but allow subheaders)
-            if line.strip().startswith('#' * header_level) and not line.strip().startswith(header):
+            # Stop at the next header of the same or higher level (markdown) or next all-caps line (DOCX)
+            if (line.strip().startswith('#' * header_level) and not line.strip().startswith(header)) or \
+               (line.strip().isupper() and len(line.strip().split()) < 6):
                 break
             section.append(line)
     extracted = '\n'.join(section).strip() if section else None
-    if header == '## Member Requirements':
+    if header in ['## Member Requirements', 'Member Requirements']:
         print(f"[DEBUG] FINAL Extracted section for '{header}':\n{extracted}")
     return extracted
 
@@ -304,3 +308,6 @@ Here is the relevant information from our knowledge base:
                               "For the most accurate and up-to-date information, please contact chapter leadership directly.")
                     st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
+
+# After loading the knowledge base, print the loaded keys
+print("Loaded knowledge base keys:", list(kb_handler.knowledge_base.keys()))
