@@ -26,13 +26,16 @@ class KnowledgeBaseHandler:
                         'text': markdown.markdown(content)
                     }
             elif file_path.suffix == ".docx":
-                doc = Document(file_path)
-                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-                content = '\n'.join(paragraphs)
-                self.knowledge_base[file_path.stem] = {
-                    'markdown': content,
-                    'text': content
-                }
+                try:
+                    doc = Document(file_path)
+                    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                    content = '\n'.join(paragraphs)
+                    self.knowledge_base[file_path.stem] = {
+                        'markdown': content,
+                        'text': content
+                    }
+                except Exception as e:
+                    print(f"Failed to load DOCX file {file_path}: {e}")
             elif file_path.suffix == ".xlsx":
                 wb = openpyxl.load_workbook(file_path)
                 all_text = []
