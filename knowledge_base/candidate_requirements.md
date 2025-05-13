@@ -1,17 +1,14 @@
-# BAP Member Requirements and Checklist
+# BAP Candidate Requirements and Checklist
 
-## Member Requirements
+## Candidate Requirements
 
 ### Attendance Requirements
-- 80% attendance at professional meetings
+- 100% attendance at professional meetings
 - Attend half of all community service and fundraising events
 - Attend Year-End Induction
 
 ### Tutoring Requirements
-- Complete 8 hours of tutoring services in the academic year
-
-### Financial Requirements
-- $25 annual membership fee
+- Complete at least 4 hours of tutoring services if you are a candidate in the Fall Semester; 8 hours if you are a candidate in the Spring Semester.
 
 ### Reflection Papers Policy
 - Required if you miss a meeting if you have either class, work, or student athlete.
@@ -19,18 +16,18 @@
 - Must watch the meeting recording on YouTube and submit a one-page reflection
 - Submit via WebCampus on the Discussion Board Page before the next meeting
 
-## Member Checklist
+## Candidate Checklist
 
-✓ Pay Annual Membership Dues
+✓ Submit Candidacy Application
+✓ Attend BAP 101 Boot Camp (Orientation/Interest Meeting)
 ✓ Attend Career Fair
 ✓ Attend Induction Meeting each semester
 ✓ Complete Tutoring Hours (4 - Semester/8 - Academic Year)
-✓ Maintain 80% Attendance at Meetings
+✓ 100% In-Person Attendance at Meetings
 ✓ Complete Community Service Hours
 
 ## Important Notes
-- BAP Members have the option to attend meetings either In-Person or Virtually
-- Zoom links are sent every Monday
+- All BAP Candidates are required to come In-Person for every single BAP Meeting.
 - Attendance tracking via QR code is mandatory for both in-person and virtual attendance
 - The reflection paper policy applies to both BAP Candidates and Members
 - All tutoring hours must be scheduled through the WebCampus Tutoring Scheduling Link 
