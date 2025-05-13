@@ -84,11 +84,14 @@ def extract_section(content, header):
             in_section = True
             continue  # Don't include the header itself
         if in_section:
-            # Stop at the next header of the same or higher level
-            if line.strip().startswith('#' * header_level):
+            # Stop at the next header of the same or higher level (but allow subheaders)
+            if line.strip().startswith('#' * header_level) and not line.strip().startswith(header):
                 break
             section.append(line)
-    return '\n'.join(section).strip() if section else None
+    extracted = '\n'.join(section).strip() if section else None
+    if header == '## Member Requirements':
+        print(f"[DEBUG] FINAL Extracted section for '{header}':\n{extracted}")
+    return extracted
 
 def extract_excel_section(content, section_name):
     # content is a string with rows like 'Section | Content'
