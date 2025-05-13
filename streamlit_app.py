@@ -112,6 +112,20 @@ def extract_meetings_by_month(content, month):
         i += 1
     return '\n\n'.join(meetings) if meetings else None
 
+def get_available_model(client, preferred="gpt-4", fallback="gpt-3.5-turbo"):
+    """Check if the preferred model is available, otherwise use fallback"""
+    try:
+        # Try a simple call to check access
+        client.chat.completions.create(
+            model=preferred,
+            messages=[{"role": "system", "content": "ping"}],
+            max_tokens=1,
+        )
+        return preferred
+    except Exception as e:
+        print(f"Warning: {preferred} not available, falling back to {fallback}. Error: {e}")
+        return fallback
+
 # Create a chat input field
 if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapter"):
     # Store and display the current prompt
@@ -248,8 +262,12 @@ Here is the relevant information from our knowledge base:
                     {"role": "system", "content": system_prompt.format(relevant_context=relevant_context)}
                 ]
                 messages.extend([{"role": m["role"], "content": m["content"]} for m in last_msgs])
+                
+                # Get available model
+                model = get_available_model(client)
+                
                 stream = client.chat.completions.create(
-                    model="gpt-4",  # Changed to GPT-4 for better accuracy
+                    model=model,
                     messages=messages,
                     temperature=0.3,  # Lowered temperature for more deterministic responses
                     stream=True,
