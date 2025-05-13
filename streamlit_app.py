@@ -8,6 +8,13 @@ import pandas as pd
 # Initialize knowledge base handler
 kb_handler = KnowledgeBaseHandler()
 
+# Debug: Print loaded knowledge base files and their headers
+print("Loaded knowledge base files:")
+for kb_name, kb_content in kb_handler.knowledge_base.items():
+    print(f"- {kb_name}: {len(kb_content['markdown'].splitlines())} lines")
+    # Print first few lines for preview
+    print("  Preview:", '\n'.join(kb_content['markdown'].splitlines()[:5]))
+
 # Show title and description
 st.title("InformaNu")
 st.write(
@@ -71,15 +78,17 @@ def extract_section(content, header):
     lines = content.split('\n')
     section = []
     in_section = False
+    header_level = header.count('#')
     for line in lines:
         if line.strip().startswith(header):
             in_section = True
+            continue  # Don't include the header itself
+        if in_section:
+            # Stop at the next header of the same or higher level
+            if line.strip().startswith('#' * header_level):
+                break
             section.append(line)
-        elif in_section and (line.startswith('##') or line.startswith('#')):
-            break
-        elif in_section:
-            section.append(line)
-    return '\n'.join(section) if section else None
+    return '\n'.join(section).strip() if section else None
 
 def extract_excel_section(content, section_name):
     # content is a string with rows like 'Section | Content'
@@ -136,6 +145,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     # Process common queries directly
     response = None
     query = prompt.lower()
+    print(f"\n[DEBUG] User query: {query}")
     
     if 'next meeting' in query or ('when' in query and 'meeting' in query):
         schedule = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
@@ -145,6 +155,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                 response = "The next meeting is:\n" + response
             else:
                 response = "I couldn't find any upcoming meetings in the schedule."
+        print(f"[DEBUG] Next meeting response: {response}")
     
     elif any(phrase in query for phrase in ["today's meeting", "this week's meeting", "current meeting"]):
         schedule = kb_handler.knowledge_base.get('spring_2025_schedule', {}).get('markdown', '')
@@ -154,6 +165,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                 response = "This week's meeting is:\n" + response
             else:
                 response = "I couldn't find a meeting scheduled for this week. The schedule might need to be updated, or there might not be a meeting this week. Please check the official chapter communication channels for the most up-to-date information."
+        print(f"[DEBUG] This week's meeting response: {response}")
 
     strict_kb_answered = False
     response = None
@@ -163,11 +175,13 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
         for kb_name, kb_content in kb_handler.knowledge_base.items():
             # Try markdown/docx
             section = extract_section(kb_content['markdown'], '## Member Requirements')
+            print(f"[DEBUG] Extracted section for '## Member Requirements' from {kb_name}:\n{section}")
             if section:
                 response = section
                 break
             # Try Excel
             excel_section = extract_excel_section(kb_content['markdown'], 'Member Requirements')
+            print(f"[DEBUG] Extracted Excel section for 'Member Requirements' from {kb_name}:\n{excel_section}")
             if excel_section:
                 response = '## Member Requirements\n' + excel_section
                 break
@@ -182,6 +196,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             candidacy = extract_section(kb_content['markdown'], '## Candidacy Requirements')
             excel_elig = extract_excel_section(kb_content['markdown'], 'Candidate Eligibility')
             excel_cand = extract_excel_section(kb_content['markdown'], 'Candidacy Requirements')
+            print(f"[DEBUG] Extracted eligibility: {eligibility}\nCandidacy: {candidacy}\nExcel eligibility: {excel_elig}\nExcel candidacy: {excel_cand}")
             if eligibility or candidacy or excel_elig or excel_cand:
                 response = ''
                 if eligibility:
@@ -201,6 +216,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
     elif 'meeting schedule' in query.lower() or 'schedule for this semester' in query.lower():
         for kb_name, kb_content in kb_handler.knowledge_base.items():
             section = extract_section(kb_content['markdown'], '# Spring 2025 Meeting Schedule')
+            print(f"[DEBUG] Extracted section for '# Spring 2025 Meeting Schedule' from {kb_name}:\n{section}")
             if section:
                 response = section
                 break
@@ -215,6 +231,7 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             if month_name in query.lower():
                 for kb_name, kb_content in kb_handler.knowledge_base.items():
                     meetings = extract_meetings_by_month(kb_content['markdown'], month_num)
+                    print(f"[DEBUG] Extracted meetings for {month_name} from {kb_name}:\n{meetings}")
                     if meetings:
                         response = meetings
                         break
@@ -235,13 +252,14 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
             relevant_context = ""
             if matches:
                 relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
+            print(f"[DEBUG] Relevant context for LLM:\n{relevant_context}")
             if relevant_context or len(st.session_state.messages) > 0:
                 system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. 
 Your primary role is to provide accurate information about chapter requirements, events, and policies.
 
 IMPORTANT RULES:
 1. ONLY use information from the provided knowledge base
-2. If the information is not in the knowledge base, say "I don't have that information in my knowledge base. Please contact chapter leadership."
+2. If the information is not in the knowledge base, say \"I don't have that information in my knowledge base. Please contact chapter leadership.\"
 3. DO NOT make assumptions or provide information not explicitly stated in the knowledge base
 4. For requirements and schedule questions, ONLY use the exact content from the knowledge base
 5. Be clear and specific about requirements and deadlines
@@ -265,6 +283,8 @@ Here is the relevant information from our knowledge base:
                 
                 # Get available model
                 model = get_available_model(client)
+                print(f"[DEBUG] Using model: {model}")
+                print(f"[DEBUG] Messages sent to LLM:\n{messages}")
                 
                 stream = client.chat.completions.create(
                     model=model,
