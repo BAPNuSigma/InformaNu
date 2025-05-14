@@ -4,6 +4,7 @@ from knowledge_base_handler import KnowledgeBaseHandler
 from datetime import datetime, timedelta
 import re
 import pandas as pd
+import difflib
 
 # Initialize knowledge base handler
 kb_handler = KnowledgeBaseHandler()
@@ -248,36 +249,70 @@ if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapt
                 strict_kb_answered = True
                 break
 
+    # Strict KB: Officer Roles
+    if 'officer' in query and ('role' in query or 'responsibilit' in query):
+        found = False
+        for kb_name, kb_content in kb_handler.knowledge_base.items():
+            section_header = find_best_section(kb_content['markdown'], 'officer roles')
+            if section_header:
+                section = extract_section(kb_content['markdown'], section_header)
+                print(f"[DEBUG] Extracted officer roles from {kb_name} section '{section_header}':\n{section}")
+                if section:
+                    response = section
+                    found = True
+                    break
+        if not found:
+            response = "I'm sorry, but the specific roles of the officers are not detailed in the knowledge base provided. Please contact the chapter leadership for more detailed information."
+        strict_kb_answered = True
+
+    # Strict KB: Candidacy Requirements
+    elif 'candidacy' in query and 'requirement' in query:
+        found = False
+        for kb_name, kb_content in kb_handler.knowledge_base.items():
+            section_header = find_best_section(kb_content['markdown'], 'candidacy requirements')
+            if not section_header:
+                section_header = find_best_section(kb_content['markdown'], 'candidate requirements')
+            if section_header:
+                section = extract_section(kb_content['markdown'], section_header)
+                print(f"[DEBUG] Extracted candidacy requirements from {kb_name} section '{section_header}':\n{section}")
+                if section:
+                    response = section
+                    found = True
+                    break
+        if not found:
+            response = "I'm sorry, but the candidacy requirements are not provided in the knowledge base. Please contact the chapter leadership for more information."
+        strict_kb_answered = True
+
     # Display strict KB answer if found
     if strict_kb_answered:
         with st.chat_message("assistant"):
             st.markdown(response.strip())
         st.session_state.messages.append({"role": "assistant", "content": response.strip()})
     else:
-        # Fallback: LLM for other questions
-        if not response:
+        # General KB search for any query
+        found = False
+        for kb_name, kb_content in kb_handler.knowledge_base.items():
+            section_header = find_best_section(kb_content['markdown'], prompt)
+            if section_header:
+                section = extract_section(kb_content['markdown'], section_header)
+                print(f"[DEBUG] General KB search: extracted from {kb_name} section '{section_header}':\n{section}")
+                if section:
+                    response = section
+                    found = True
+                    break
+        if found:
+            with st.chat_message("assistant"):
+                st.markdown(response.strip())
+            st.session_state.messages.append({"role": "assistant", "content": response.strip()})
+        else:
+            # Fallback: LLM for other questions
             matches = kb_handler.search_knowledge_base(query)
             relevant_context = ""
             if matches:
                 relevant_context = "\n\n".join([match['content'] for match in matches[:3]])
             print(f"[DEBUG] Relevant context for LLM:\n{relevant_context}")
             if relevant_context or len(st.session_state.messages) > 0:
-                system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. 
-Your primary role is to provide accurate information about chapter requirements, events, and policies.
-
-IMPORTANT RULES:
-1. ONLY use information from the provided knowledge base
-2. If the information is not in the knowledge base, say \"I don't have that information in my knowledge base. Please contact chapter leadership.\"
-3. DO NOT make assumptions or provide information not explicitly stated in the knowledge base
-4. For requirements and schedule questions, ONLY use the exact content from the knowledge base
-5. Be clear and specific about requirements and deadlines
-6. Maintain a professional but friendly tone
-7. For time-sensitive information, remind users to verify through official channels
-
-Here is the relevant information from our knowledge base:
-
-{relevant_context}
-"""
+                system_prompt = """You are InformaNu, the official Q&A assistant for Beta Alpha Psi: Nu Sigma Chapter. \nYour primary role is to provide accurate information about chapter requirements, events, and policies.\n\nIMPORTANT RULES:\n1. ONLY use information from the provided knowledge base\n2. If the information is not in the knowledge base, say \"I don't have that information in my knowledge base. Please contact chapter leadership.\"\n3. DO NOT make assumptions or provide information not explicitly stated in the knowledge base\n4. For requirements and schedule questions, ONLY use the exact content from the knowledge base\n5. Be clear and specific about requirements and deadlines\n6. Maintain a professional but friendly tone\n7. For time-sensitive information, remind users to verify through official channels\n\nHere is the relevant information from our knowledge base:\n\n{relevant_context}\n"""
                 client = OpenAI()
                 last_msgs = []
                 if len(st.session_state.messages) >= 2:
@@ -320,3 +355,29 @@ for kb_name, kb_content in kb_handler.knowledge_base.items():
     for line in lines:
         if line.strip() and (line.strip().startswith('#') or line.strip().isupper() or (len(line.strip().split()) < 6 and line.strip().endswith(':'))):
             print('  ', line.strip())
+
+# Helper to find best matching section header in a file
+def find_best_section(content, query):
+    lines = content.split('\n')
+    headers = []
+    for i, line in enumerate(lines):
+        if line.strip() and (line.strip().startswith('#') or line.strip().isupper() or (len(line.strip().split()) < 6 and line.strip().endswith(':'))):
+            headers.append((i, line.strip()))
+    # Try exact, substring, and fuzzy match
+    query_lower = query.lower()
+    best_score = 0
+    best_header = None
+    for idx, header in headers:
+        header_lower = header.lower().lstrip('#').strip()
+        if query_lower in header_lower or header_lower in query_lower:
+            print(f"[DEBUG] Substring match: '{header}' for query '{query}'")
+            return header
+        score = difflib.SequenceMatcher(None, query_lower, header_lower).ratio()
+        if score > best_score:
+            best_score = score
+            best_header = header
+    if best_score > 0.6:
+        print(f"[DEBUG] Fuzzy match: '{best_header}' for query '{query}' (score={best_score})")
+        return best_header
+    print(f"[DEBUG] No good section match for query '{query}' (best: '{best_header}', score={best_score})")
+    return None
