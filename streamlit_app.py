@@ -75,25 +75,26 @@ def find_meeting_details(schedule, target_date, look_for_next=True):
     return None
 
 def extract_section(content, header):
-    # Try both Markdown and plain text headers
-    header_plain = header.lstrip('#').strip()
+    # Try both Markdown and plain text headers, case-insensitive, allow for minor variations
+    header_plain = header.lstrip('#').strip().lower()
     lines = content.split('\n')
     section = []
     in_section = False
     header_level = header.count('#') if header.startswith('#') else 2  # Default to 2 if not markdown
     for line in lines:
-        # Match either markdown or plain text header
-        if line.strip().startswith(header) or line.strip().lower() == header_plain.lower():
+        # Match either markdown or plain text header, case-insensitive, allow for minor variations
+        line_stripped = line.strip().lower()
+        if line_stripped.startswith(header.lower()) or line_stripped == header_plain or header_plain in line_stripped:
             in_section = True
             continue
         if in_section:
             # Stop at the next header of the same or higher level (markdown) or next all-caps line (DOCX)
-            if (line.strip().startswith('#' * header_level) and not line.strip().startswith(header)) or \
+            if (line_stripped.startswith('#' * header_level) and not line_stripped.startswith(header.lower())) or \
                (line.strip().isupper() and len(line.strip().split()) < 6):
                 break
             section.append(line)
     extracted = '\n'.join(section).strip() if section else None
-    if header in ['## Member Requirements', 'Member Requirements']:
+    if header.lower() in ['## member requirements', 'member requirements', 'officer roles', 'candidacy requirements', 'candidate requirements']:
         print(f"[DEBUG] FINAL Extracted section for '{header}':\n{extracted}")
     return extracted
 
@@ -311,3 +312,11 @@ Here is the relevant information from our knowledge base:
 
 # After loading the knowledge base, print the loaded keys
 print("Loaded knowledge base keys:", list(kb_handler.knowledge_base.keys()))
+
+# Debug: Print all unique section headers found in each loaded knowledge base file
+for kb_name, kb_content in kb_handler.knowledge_base.items():
+    print(f"[DEBUG] Section headers in {kb_name}:")
+    lines = kb_content['markdown'].split('\n')
+    for line in lines:
+        if line.strip() and (line.strip().startswith('#') or line.strip().isupper() or (len(line.strip().split()) < 6 and line.strip().endswith(':'))):
+            print('  ', line.strip())
