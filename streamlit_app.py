@@ -38,14 +38,18 @@ def get_google_credentials():
         # First try to get from Streamlit secrets
         if "google_credentials" in st.secrets:
             logger.info("Found Google credentials in Streamlit secrets")
-            return st.secrets["google_credentials"]
+            creds = st.secrets["google_credentials"]
+            logger.info(f"Credentials type: {type(creds)}")
+            return creds
         
         # Then try environment variable
         creds_str = os.getenv("GOOGLE_CREDENTIALS")
         if creds_str:
             logger.info("Found Google credentials in environment variable")
             try:
-                return json.loads(creds_str)
+                creds = json.loads(creds_str)
+                logger.info(f"Parsed credentials type: {type(creds)}")
+                return creds
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
                 return None
@@ -265,30 +269,43 @@ def main():
                 """)
                 return
 
+            logger.info("Attempting to authenticate with Google...")
             scopes = ["https://www.googleapis.com/auth/spreadsheets"]
             try:
                 creds = Credentials.from_service_account_info(credentials, scopes=scopes)
                 client = gspread.authorize(creds)
+                logger.info("Successfully authenticated with Google")
             except Exception as e:
+                logger.error(f"Failed to authenticate with Google: {str(e)}")
                 st.error(f"Failed to authenticate with Google: {str(e)}")
                 return
 
             # Enter Sheet ID here!!!
             sheet_id = "17-1mKOg6kChVhWHKpl4MiOGxEjbAnIjha1jHCvHELWs"
             try:
+                logger.info(f"Attempting to access Google Sheet with ID: {sheet_id}")
                 sheet = client.open_by_key(sheet_id)
                 worksheetSchedule = sheet.get_worksheet(0)
                 schedulelist = worksheetSchedule.get_all_records()
+                logger.info(f"Successfully retrieved {len(schedulelist)} records from Google Sheet")
             except Exception as e:
+                logger.error(f"Failed to access Google Sheet: {str(e)}")
                 st.error(f"Failed to access Google Sheet: {str(e)}")
                 return
 
             # Generate PDF in the 'documents' folder, overwriting any existing file
             output_path = os.path.join(documents_folder, "schedule_list_report.pdf")
             try:
+                logger.info(f"Attempting to generate PDF at: {output_path}")
                 generate_pdf(schedulelist, output_path)
-                st.success(f"PDF generated and saved to {output_path}")
+                if os.path.exists(output_path):
+                    logger.info(f"PDF successfully generated at: {output_path}")
+                    st.success(f"PDF generated and saved to {output_path}")
+                else:
+                    logger.error("PDF file was not created")
+                    st.error("PDF file was not created")
             except Exception as e:
+                logger.error(f"Failed to generate PDF: {str(e)}")
                 st.error(f"Failed to generate PDF: {str(e)}")
                 return
 
@@ -298,6 +315,7 @@ def main():
 
         # Automatically process PDFs in 'documents' folder on page load
         pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.endswith('.pdf')]
+        logger.info(f"Found {len(pdf_paths)} PDF files in {documents_folder}")
         
         if pdf_paths and st.session_state.conversation is None:
             with st.spinner("Processing PDFs..."):
