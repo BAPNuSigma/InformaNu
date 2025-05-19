@@ -14,6 +14,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
 import logging
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,21 @@ def get_openai_api_key():
         return os.getenv("OPENAI_API_KEY")
     except Exception as e:
         logger.error(f"Error getting OpenAI API key: {e}")
+        return None
+
+# Function to get Google credentials
+def get_google_credentials():
+    try:
+        # First try to get from Streamlit secrets
+        if "google_credentials" in st.secrets:
+            return st.secrets["google_credentials"]
+        # Then try environment variable
+        creds_str = os.getenv("GOOGLE_CREDENTIALS")
+        if creds_str:
+            return json.loads(creds_str)
+        return None
+    except Exception as e:
+        logger.error(f"Error getting Google credentials: {e}")
         return None
 
 # Function to convert dictionary to string
@@ -229,13 +245,17 @@ def main():
 
         # Generate PDF from Google Sheets data
         try:
-            credentials = st.secrets["google_credentials"]
+            credentials = get_google_credentials()
+            if not credentials:
+                st.error("Google credentials not found. Please check your configuration.")
+                return
+
             scopes = ["https://www.googleapis.com/auth/spreadsheets"]
             creds = Credentials.from_service_account_info(credentials, scopes=scopes)
             client = gspread.authorize(creds)
 
             # Enter Sheet ID here!!!
-            sheet_id = "1hQgAn1Wg4Cz9qcNg04gJdQqrjuMZEjjJrXwK3dIi_Og"
+            sheet_id = "17-1mKOg6kChVhWHKpl4MiOGxEjbAnIjha1jHCvHELWs"
             sheet = client.open_by_key(sheet_id)
             worksheetSchedule = sheet.get_worksheet(0)
             schedulelist = worksheetSchedule.get_all_records()
