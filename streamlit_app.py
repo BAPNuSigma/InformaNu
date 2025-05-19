@@ -1,5 +1,9 @@
 import streamlit as st
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("python-dotenv not found, using environment variables directly")
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
@@ -126,7 +130,6 @@ def process_pdfs(pdf_paths):
     st.session_state.conversation = get_conversation_chain(vectorstore)
 
 def main():
-    load_dotenv()
     st.set_page_config(page_title="BAP-GPT", page_icon=":mag:")
     st.write(css, unsafe_allow_html=True)
 
