@@ -4,7 +4,18 @@ try:
     load_dotenv()
 except ImportError:
     print("python-dotenv not found, using environment variables directly")
-from PyPDF2 import PdfReader
+
+try:
+    from PyPDF2 import PdfReader
+except ImportError:
+    st.error("""
+    PyPDF2 is not installed. Please install it using:
+    ```
+    pip install PyPDF2==3.0.1
+    ```
+    """)
+    st.stop()
+
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
