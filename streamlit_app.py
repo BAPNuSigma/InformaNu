@@ -135,7 +135,7 @@ def main():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
-    # Generate PDF from Google Sheets data
+    # Generate PDF from Google Sheets data for schedule
     credentials = st.secrets["google_credentials"]
     
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -156,15 +156,25 @@ def main():
     output_path = os.path.join("documents", "schedule_list_report.pdf")
     generate_pdf(schedulelist, output_path)
 
-    st.write(f"PDF generated and saved to {output_path}")
+    st.write(f"Schedule PDF generated and saved to {output_path}")
 
-    # Automatically process PDFs in 'documents' folder on page load
-    documents_folder = 'documents'
-    pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.endswith('.pdf')]
+    # Process both schedule PDF and knowledge base PDFs
+    all_pdf_paths = []
     
-    if pdf_paths and st.session_state.conversation is None:
-        with st.spinner("Processing"):
-            process_pdfs(pdf_paths)
+    # Add schedule PDF
+    all_pdf_paths.append(output_path)
+    
+    # Add knowledge base PDFs
+    knowledge_base_folder = 'knowledge_base'
+    if os.path.exists(knowledge_base_folder):
+        kb_pdf_paths = [os.path.join(knowledge_base_folder, filename) 
+                       for filename in os.listdir(knowledge_base_folder) 
+                       if filename.endswith('.pdf')]
+        all_pdf_paths.extend(kb_pdf_paths)
+    
+    if all_pdf_paths and st.session_state.conversation is None:
+        with st.spinner("Processing documents..."):
+            process_pdfs(all_pdf_paths)
 
     st.header("Chat with BAP-GPT :mag:")
     user_question = st.text_input("Ask a question about national or chapter specific policies")
