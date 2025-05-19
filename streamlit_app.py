@@ -221,6 +221,12 @@ def main():
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = None
 
+        # Create documents directory if it doesn't exist
+        documents_folder = 'documents'
+        if not os.path.exists(documents_folder):
+            os.makedirs(documents_folder)
+            st.info(f"Created {documents_folder} directory")
+
         # Generate PDF from Google Sheets data
         try:
             credentials = st.secrets["google_credentials"]
@@ -234,12 +240,8 @@ def main():
             worksheetSchedule = sheet.get_worksheet(0)
             schedulelist = worksheetSchedule.get_all_records()
 
-            # Ensure the 'documents' directory exists
-            if not os.path.exists("documents"):
-                os.makedirs("documents")
-
             # Generate PDF in the 'documents' folder, overwriting any existing file
-            output_path = os.path.join("documents", "schedule_list_report.pdf")
+            output_path = os.path.join(documents_folder, "schedule_list_report.pdf")
             generate_pdf(schedulelist, output_path)
 
             st.write(f"PDF generated and saved to {output_path}")
@@ -248,12 +250,13 @@ def main():
             st.error(f"Error with Google Sheets integration: {e}")
 
         # Automatically process PDFs in 'documents' folder on page load
-        documents_folder = 'documents'
         pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.endswith('.pdf')]
         
         if pdf_paths and st.session_state.conversation is None:
             with st.spinner("Processing PDFs..."):
                 process_pdfs(pdf_paths)
+        elif not pdf_paths:
+            st.warning("No PDF files found in the documents directory. Please ensure PDFs are present.")
 
         st.header("Chat with BAP-GPT :mag:")
         user_question = st.text_input("Ask a question about national or chapter specific policies")
