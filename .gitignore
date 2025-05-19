@@ -162,4 +162,9 @@ cython_debug/
 #.idea/
 credentials.json
 
-.streamlit/
+# Streamlit
+.streamlit/*
+!.streamlit/secrets.toml
+
+# Documents
+documents/
