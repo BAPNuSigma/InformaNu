@@ -309,8 +309,8 @@ def main():
                 If you're seeing this message after the first run, please check if the PDF generation was successful.
             """)
 
-        st.header("Chat with BAP-GPT :mag:")
-        user_question = st.text_input("Ask a question about national or chapter specific policies")
+        st.header("InformaNu :mag:")
+        user_question = st.text_input("Welcome to InformaNu: Beta Alpha Psi - Nu Sigma Chapter Q&A Bot! Ask me anything about our chapter, events, requirements, or history.")
         if user_question:
             handle_userinput(user_question)
 
