@@ -37,11 +37,20 @@ def get_google_credentials():
     try:
         # First try to get from Streamlit secrets
         if "google_credentials" in st.secrets:
+            logger.info("Found Google credentials in Streamlit secrets")
             return st.secrets["google_credentials"]
+        
         # Then try environment variable
         creds_str = os.getenv("GOOGLE_CREDENTIALS")
         if creds_str:
-            return json.loads(creds_str)
+            logger.info("Found Google credentials in environment variable")
+            try:
+                return json.loads(creds_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
+                return None
+        
+        logger.error("No Google credentials found in either Streamlit secrets or environment variables")
         return None
     except Exception as e:
         logger.error(f"Error getting Google credentials: {e}")
@@ -247,24 +256,42 @@ def main():
         try:
             credentials = get_google_credentials()
             if not credentials:
-                st.error("Google credentials not found. Please check your configuration.")
+                st.error("""
+                    Google credentials not found. Please ensure you have set up either:
+                    1. GOOGLE_CREDENTIALS environment variable in Render, or
+                    2. google_credentials in .streamlit/secrets.toml
+                    
+                    The credentials should be a JSON string containing your Google service account details.
+                """)
                 return
 
             scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-            creds = Credentials.from_service_account_info(credentials, scopes=scopes)
-            client = gspread.authorize(creds)
+            try:
+                creds = Credentials.from_service_account_info(credentials, scopes=scopes)
+                client = gspread.authorize(creds)
+            except Exception as e:
+                st.error(f"Failed to authenticate with Google: {str(e)}")
+                return
 
             # Enter Sheet ID here!!!
             sheet_id = "17-1mKOg6kChVhWHKpl4MiOGxEjbAnIjha1jHCvHELWs"
-            sheet = client.open_by_key(sheet_id)
-            worksheetSchedule = sheet.get_worksheet(0)
-            schedulelist = worksheetSchedule.get_all_records()
+            try:
+                sheet = client.open_by_key(sheet_id)
+                worksheetSchedule = sheet.get_worksheet(0)
+                schedulelist = worksheetSchedule.get_all_records()
+            except Exception as e:
+                st.error(f"Failed to access Google Sheet: {str(e)}")
+                return
 
             # Generate PDF in the 'documents' folder, overwriting any existing file
             output_path = os.path.join(documents_folder, "schedule_list_report.pdf")
-            generate_pdf(schedulelist, output_path)
+            try:
+                generate_pdf(schedulelist, output_path)
+                st.success(f"PDF generated and saved to {output_path}")
+            except Exception as e:
+                st.error(f"Failed to generate PDF: {str(e)}")
+                return
 
-            st.write(f"PDF generated and saved to {output_path}")
         except Exception as e:
             logger.error(f"Error with Google Sheets integration: {e}")
             st.error(f"Error with Google Sheets integration: {e}")
@@ -276,7 +303,11 @@ def main():
             with st.spinner("Processing PDFs..."):
                 process_pdfs(pdf_paths)
         elif not pdf_paths:
-            st.warning("No PDF files found in the documents directory. Please ensure PDFs are present.")
+            st.warning("""
+                No PDF files found in the documents directory. 
+                This is expected on first run - the app will generate the PDF from Google Sheets data.
+                If you're seeing this message after the first run, please check if the PDF generation was successful.
+            """)
 
         st.header("Chat with BAP-GPT :mag:")
         user_question = st.text_input("Ask a question about national or chapter specific policies")
