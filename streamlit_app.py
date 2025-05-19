@@ -22,43 +22,25 @@ logger = logging.getLogger(__name__)
 
 # Function to get OpenAI API key
 def get_openai_api_key():
-    try:
-        # First try to get from Streamlit secrets
-        if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
-            return st.secrets["openai"]["api_key"]
-        # Then try environment variable
-        return os.getenv("OPENAI_API_KEY")
-    except Exception as e:
-        logger.error(f"Error getting OpenAI API key: {e}")
-        return None
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        return api_key
+    if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
+        return st.secrets["openai"]["api_key"]
+    return None
 
 # Function to get Google credentials
 def get_google_credentials():
-    try:
-        # First try to get from Streamlit secrets
-        if "google_credentials" in st.secrets:
-            logger.info("Found Google credentials in Streamlit secrets")
-            creds = st.secrets["google_credentials"]
-            logger.info(f"Credentials type: {type(creds)}")
-            return creds
-        
-        # Then try environment variable
-        creds_str = os.getenv("GOOGLE_CREDENTIALS")
-        if creds_str:
-            logger.info("Found Google credentials in environment variable")
-            try:
-                creds = json.loads(creds_str)
-                logger.info(f"Parsed credentials type: {type(creds)}")
-                return creds
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
-                return None
-        
-        logger.error("No Google credentials found in either Streamlit secrets or environment variables")
-        return None
-    except Exception as e:
-        logger.error(f"Error getting Google credentials: {e}")
-        return None
+    creds_str = os.getenv("GOOGLE_CREDENTIALS")
+    if creds_str:
+        try:
+            return json.loads(creds_str)
+        except Exception as e:
+            st.error(f"Could not parse GOOGLE_CREDENTIALS: {e}")
+            return None
+    if "google_credentials" in st.secrets:
+        return st.secrets["google_credentials"]
+    return None
 
 # Function to convert dictionary to string
 def dict_to_string(d):
