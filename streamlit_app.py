@@ -145,7 +145,7 @@ def get_conversation_chain(vectorstore):
         # Add a personality to the bot by setting an initial system message
         initial_message = {
             "role": "system",
-            "content": "You are BAP-GPT, an expert on national and chapter-specific policies with a friendly and helpful personality. Always provide clear, concise, and accurate information using only the information in the provided texts to answer questions. If the text does not provide answers to my questions then state -Apologies, I'm not trained on that information just yet-. Never make up any information and never give information on anything harmful or not business appropriate."
+            "content": "You are InformaNu, an expert on national and chapter-specific policies with a friendly and helpful personality. Always provide clear, concise, and accurate information using only the information in the provided texts to answer questions. If the text does not provide answers to my questions then state -Apologies, I'm not trained on that information just yet-. Never make up any information and never give information on anything harmful or not business appropriate."
         }
         memory.chat_memory.add_user_message(initial_message["content"])
         
@@ -224,7 +224,7 @@ def process_pdfs(pdf_paths):
 def main():
     try:
         load_dotenv()
-        st.set_page_config(page_title="BAP-GPT", page_icon=":mag:")
+        st.set_page_config(page_title="InformaNu", page_icon=":mag:")
         st.write(css, unsafe_allow_html=True)
 
         if "conversation" not in st.session_state:
@@ -296,8 +296,8 @@ def main():
             st.error(f"Error with Google Sheets integration: {e}")
 
         # Automatically process PDFs in 'documents' folder on page load
-        pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.endswith('.pdf')]
-        logger.info(f"Found {len(pdf_paths)} PDF files in {documents_folder}")
+        pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.lower().endswith('.pdf')]
+        logger.info(f"PDFs found in {documents_folder}: {pdf_paths}")
         
         if pdf_paths and st.session_state.conversation is None:
             with st.spinner("Processing PDFs..."):
