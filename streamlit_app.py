@@ -8,8 +8,6 @@ from langchain.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
-import gspread
-from google.oauth2.service_account import Credentials
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
@@ -27,19 +25,6 @@ def get_openai_api_key():
         return api_key
     if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
         return st.secrets["openai"]["api_key"]
-    return None
-
-# Function to get Google credentials
-def get_google_credentials():
-    creds_str = os.getenv("GOOGLE_CREDENTIALS")
-    if creds_str:
-        try:
-            return json.loads(creds_str)
-        except Exception as e:
-            st.error(f"Could not parse GOOGLE_CREDENTIALS: {e}")
-            return None
-    if "google_credentials" in st.secrets:
-        return st.secrets["google_credentials"]
     return None
 
 # Function to convert dictionary to string
@@ -238,43 +223,6 @@ def main():
             os.makedirs(documents_folder)
             st.info(f"Created {documents_folder} directory")
 
-        # Generate PDF from Google Sheets data
-        try:
-            credentials = get_google_credentials()
-            if not credentials:
-                st.error("""
-                    Google credentials not found. Please ensure you have set up either:
-                    1. GOOGLE_CREDENTIALS environment variable in Render, or
-                    2. google_credentials in .streamlit/secrets.toml
-                    
-                    The credentials should be a JSON string containing your Google service account details.
-                """)
-                return
-
-            logger.info("Attempting to authenticate with Google...")
-            scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-            try:
-                creds = Credentials.from_service_account_info(credentials, scopes=scopes)
-                client = gspread.authorize(creds)
-                logger.info("Successfully authenticated with Google")
-            except Exception as e:
-                logger.error(f"Failed to authenticate with Google: {str(e)}")
-                st.error(f"Failed to authenticate with Google: {str(e)}")
-                return
-
-            # Enter Sheet ID here!!!
-            sheet_id = "17-1mKOg6kChVhWHKpl4MiOGxEjbAnIjha1jHCvHELWs"
-            try:
-                logger.info(f"Attempting to access Google Sheet with ID: {sheet_id}")
-                sheet = client.open_by_key(sheet_id)
-                worksheetSchedule = sheet.get_worksheet(0)
-                schedulelist = worksheetSchedule.get_all_records()
-                logger.info(f"Successfully retrieved {len(schedulelist)} records from Google Sheet")
-            except Exception as e:
-                logger.error(f"Failed to access Google Sheet: {str(e)}")
-                st.error(f"Failed to access Google Sheet: {str(e)}")
-                return
-
             # Generate PDF in the 'documents' folder, overwriting any existing file
             output_path = os.path.join(documents_folder, "schedule_list_report.pdf")
             try:
@@ -290,10 +238,6 @@ def main():
                 logger.error(f"Failed to generate PDF: {str(e)}")
                 st.error(f"Failed to generate PDF: {str(e)}")
                 return
-
-        except Exception as e:
-            logger.error(f"Error with Google Sheets integration: {e}")
-            st.error(f"Error with Google Sheets integration: {e}")
 
         # Automatically process PDFs in 'documents' folder on page load
         pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.lower().endswith('.pdf')]
