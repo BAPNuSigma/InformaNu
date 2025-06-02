@@ -1,266 +1,155 @@
 import streamlit as st
-from dotenv import load_dotenv
-from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-from htmlTemplates import css, bot_template, user_template
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
+from openai import OpenAI
 import os
-import logging
-import json
+from dotenv import load_dotenv
+import glob
+from PyPDF2 import PdfReader
+from docx import Document
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Load environment variables
+load_dotenv()
 
-# Function to get OpenAI API key
-def get_openai_api_key():
-    api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
-        return api_key
-    if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
-        return st.secrets["openai"]["api_key"]
-    return None
-
-# Function to convert dictionary to string
-def dict_to_string(d):
+def extract_text_from_pdf(file_path):
+    """Extract text from a PDF file."""
     try:
-        items = [f'{k}: {v}' for k, v in d.items()]
-        return '{ ' + ', '.join(items) + ' }'
+        reader = PdfReader(file_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        return text
     except Exception as e:
-        logger.error(f"Error converting dictionary to string: {e}")
-        return str(d)
+        st.error(f"Error reading PDF {file_path}: {str(e)}")
+        return ""
 
-# Function to generate PDF
-def generate_pdf(data, filename):
+def extract_text_from_docx(file_path):
+    """Extract text from a DOCX file."""
     try:
-        c = canvas.Canvas(filename, pagesize=letter)
-        width, height = letter
-
-        # Define a title
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(30, height - 40, "Updated Schedule")
-
-        # Add data to PDF
-        y = height - 70
-        c.setFont("Helvetica", 10)
-        for entry in data:
-            entry_str = dict_to_string(entry)
-            c.drawString(30, y, entry_str)
-            y -= 15  # Move to next line
-            if y < 40:  # Check if the current page is full
-                c.showPage()
-                c.setFont("Helvetica", 10)
-                y = height - 40
-
-        c.save()
-        logger.info(f"PDF generated successfully: {filename}")
+        doc = Document(file_path)
+        text = ""
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+        return text
     except Exception as e:
-        logger.error(f"Error generating PDF: {e}")
-        st.error(f"Error generating PDF: {e}")
+        st.error(f"Error reading DOCX {file_path}: {str(e)}")
+        return ""
 
-# Function to extract text from PDFs
-def get_pdf_text(pdf_paths):
-    text = ""
-    for pdf_path in pdf_paths:
+def load_knowledge_base():
+    """Load all files from the knowledge base directory."""
+    knowledge_base = {}
+    
+    # Process all files in the knowledge base directory
+    for file_path in glob.glob("knowledge_base/*.*"):
+        file_name = os.path.basename(file_path)
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
         try:
-            pdf_reader = PdfReader(pdf_path)
-            for page in pdf_reader.pages:
-                text += page.extract_text()
-        except Exception as e:
-            logger.error(f"Error reading PDF {pdf_path}: {e}")
-            st.error(f"Error reading PDF {pdf_path}: {e}")
-    return text
-
-# Function to split text into chunks
-def get_text_chunks(text):
-    try:
-        text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-        chunks = text_splitter.split_text(text)
-        return chunks
-    except Exception as e:
-        logger.error(f"Error splitting text: {e}")
-        st.error(f"Error splitting text: {e}")
-        return []
-
-# Function to create vector store from text chunks
-def get_vectorstore(text_chunks):
-    try:
-        openai_api_key = get_openai_api_key()
-        if not openai_api_key:
-            st.error("OpenAI API key not found. Please check your configuration.")
-            return None
-        embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-        vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
-        return vectorstore
-    except Exception as e:
-        logger.error(f"Error creating vector store: {e}")
-        st.error(f"Error creating vector store: {e}")
-        return None
-
-# Function to create conversation chain
-def get_conversation_chain(vectorstore):
-    try:
-        openai_api_key = get_openai_api_key()
-        if not openai_api_key:
-            st.error("OpenAI API key not found. Please check your configuration.")
-            return None
-        llm = ChatOpenAI(
-            api_key=openai_api_key,
-            temperature=0.7,
-            model_name="gpt-3.5-turbo"
-        )
-
-        memory = ConversationBufferMemory(
-            memory_key='chat_history',
-            return_messages=True,
-            output_key='answer'
-        )
-        
-        # Add a personality to the bot by setting an initial system message
-        initial_message = {
-            "role": "system",
-            "content": "You are InformaNu, an expert on national and chapter-specific policies with a friendly and helpful personality. Always provide clear, concise, and accurate information using only the information in the provided texts to answer questions. If the text does not provide answers to my questions then state -Apologies, I'm not trained on that information just yet-. Never make up any information and never give information on anything harmful or not business appropriate."
-        }
-        memory.chat_memory.add_user_message(initial_message["content"])
-        
-        conversation_chain = ConversationalRetrievalChain.from_llm(
-            llm=llm,
-            retriever=vectorstore.as_retriever(
-                search_type="similarity",
-                search_kwargs={"k": 3}
-            ),
-            memory=memory,
-            return_source_documents=True
-        )
-        return conversation_chain
-    except Exception as e:
-        logger.error(f"Error creating conversation chain: {e}")
-        st.error(f"Error creating conversation chain: {e}")
-        return None
-
-# Function to handle user input
-def handle_userinput(user_question):
-    try:
-        if st.session_state.conversation is None:
-            st.error("Please wait while the system initializes...")
-            return
-
-        response = st.session_state.conversation({'question': user_question})
-        st.session_state.chat_history = response['chat_history']
-
-        # Skip the first message (system message)
-        skip_first_message = True
-
-        for i, message in enumerate(st.session_state.chat_history):
-            if skip_first_message:
-                skip_first_message = False
-                continue
-            if i % 2 == 0:
-                st.write(user_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
+            if file_ext == '.md':
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+            elif file_ext == '.pdf':
+                content = extract_text_from_pdf(file_path)
+            elif file_ext == '.docx':
+                content = extract_text_from_docx(file_path)
             else:
-                st.write(bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
-    except Exception as e:
-        logger.error(f"Error handling user input: {e}")
-        st.error(f"Error handling user input: {e}")
+                st.warning(f"Unsupported file type: {file_ext} for {file_name}")
+                continue
+                
+            if content.strip():  # Only add non-empty content
+                knowledge_base[file_name] = content
+                
+        except Exception as e:
+            st.error(f"Error processing {file_name}: {str(e)}")
+            continue
+            
+    return knowledge_base
 
-# Function to process PDFs
-def process_pdfs(pdf_paths):
+def get_relevant_context(query, knowledge_base):
+    """Get relevant context from knowledge base based on the query."""
+    # For now, we'll return all context, but this could be improved with semantic search
+    context = "\n\n".join(knowledge_base.values())
+    return context
+
+# Load knowledge base
+KNOWLEDGE_BASE = load_knowledge_base()
+
+# Set page config
+st.set_page_config(
+    page_title="Beta Alpha Psi: Nu Sigma Chapter Q&A Bot",
+    page_icon="🎓",
+    layout="wide"
+)
+
+# Show title and description
+st.title("InformaNu")
+st.write(
+    "Welcome to InformaNu: Beta Alpha Psi - Nu Sigma Chapter Q&A Bot! "
+    "Ask me anything about our chapter, events, requirements, or history."
+)
+
+# Get API key from environment variables or secrets.toml
+openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+
+if not openai_api_key:
+    st.error("OpenAI API key not found. Please check your environment variables or secrets.toml file.")
+    st.stop()
+
+# Create an OpenAI client
+client = OpenAI(api_key=openai_api_key)
+
+# System prompt for the assistant
+SYSTEM_PROMPT = """You are a helpful assistant for Beta Alpha Psi: Nu Sigma Chapter. 
+Your role is to provide accurate information about the chapter, including:
+- Chapter history and achievements
+- Membership requirements and benefits
+- Event information and schedules
+- Professional development opportunities
+- Chapter leadership and structure
+- Academic requirements and standards
+
+Always be professional, friendly, and accurate in your responses. If you're unsure about something, 
+acknowledge the limitation and suggest where the user might find more information.
+
+Use the provided context from the knowledge base to answer questions accurately. If the information
+is not in the context, acknowledge that you don't have that specific information."""
+
+# Create a session state variable to store the chat messages
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+# Display the existing chat messages
+for message in st.session_state.messages:
+    if message["role"] != "system":  # Don't display system messages
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+# Create a chat input field
+if prompt := st.chat_input("Ask me anything about Beta Alpha Psi: Nu Sigma Chapter..."):
+    # Store and display the current prompt
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Get relevant context from knowledge base
+    context = get_relevant_context(prompt, KNOWLEDGE_BASE)
+    
+    # Add context to the messages
+    messages_with_context = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": f"Context from knowledge base:\n{context}\n\nUser question: {prompt}"}
+    ]
+
+    # Generate a response using the OpenAI API
     try:
-        # get pdf text
-        raw_text = get_pdf_text(pdf_paths)
-        if not raw_text:
-            st.error("No text could be extracted from the PDFs")
-            return
+        stream = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages_with_context,
+            stream=True,
+        )
 
-        # get the text chunks
-        text_chunks = get_text_chunks(raw_text)
-        if not text_chunks:
-            st.error("No text chunks could be created")
-            return
-
-        # create vector store
-        vectorstore = get_vectorstore(text_chunks)
-        if vectorstore is None:
-            st.error("Could not create vector store")
-            return
-
-        # create conversation chain
-        st.session_state.conversation = get_conversation_chain(vectorstore)
-        if st.session_state.conversation is None:
-            st.error("Could not create conversation chain")
-            return
-
-        st.success("PDFs processed successfully!")
+        # Stream the response to the chat
+        with st.chat_message("assistant"):
+            response = st.write_stream(stream)
+        st.session_state.messages.append({"role": "assistant", "content": response})
     except Exception as e:
-        logger.error(f"Error processing PDFs: {e}")
-        st.error(f"Error processing PDFs: {e}")
-
-def main():
-    try:
-        load_dotenv()
-        st.set_page_config(page_title="InformaNu", page_icon=":mag:")
-        st.write(css, unsafe_allow_html=True)
-
-        if "conversation" not in st.session_state:
-            st.session_state.conversation = None
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = None
-
-        # Create documents directory if it doesn't exist
-        documents_folder = 'documents'
-        if not os.path.exists(documents_folder):
-            os.makedirs(documents_folder)
-            st.info(f"Created {documents_folder} directory")
-
-            # Generate PDF in the 'documents' folder, overwriting any existing file
-            output_path = os.path.join(documents_folder, "schedule_list_report.pdf")
-            try:
-                logger.info(f"Attempting to generate PDF at: {output_path}")
-                generate_pdf(schedulelist, output_path)
-                if os.path.exists(output_path):
-                    logger.info(f"PDF successfully generated at: {output_path}")
-                    st.success(f"PDF generated and saved to {output_path}")
-                else:
-                    logger.error("PDF file was not created")
-                    st.error("PDF file was not created")
-            except Exception as e:
-                logger.error(f"Failed to generate PDF: {str(e)}")
-                st.error(f"Failed to generate PDF: {str(e)}")
-                return
-
-        # Automatically process PDFs in 'documents' folder on page load
-        pdf_paths = [os.path.join(documents_folder, filename) for filename in os.listdir(documents_folder) if filename.lower().endswith('.pdf')]
-        logger.info(f"PDFs found in {documents_folder}: {pdf_paths}")
-        
-        if pdf_paths and st.session_state.conversation is None:
-            with st.spinner("Processing PDFs..."):
-                process_pdfs(pdf_paths)
-        elif not pdf_paths:
-            st.warning("""
-                No PDF files found in the documents directory. 
-                This is expected on first run - the app will generate the PDF from Google Sheets data.
-                If you're seeing this message after the first run, please check if the PDF generation was successful.
-            """)
-
-        st.header("InformaNu :mag:")
-        user_question = st.text_input("Welcome to InformaNu: Beta Alpha Psi - Nu Sigma Chapter Q&A Bot! Ask me anything about our chapter, events, requirements, or history.")
-        if user_question:
-            handle_userinput(user_question)
-
-    except Exception as e:
-        logger.error(f"Error in main function: {e}")
-        st.error(f"An unexpected error occurred: {e}")
-
-if __name__ == '__main__':
-    main()
+        st.error(f"An error occurred: {str(e)}")
+        st.stop()
