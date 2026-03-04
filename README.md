@@ -264,7 +264,7 @@ pytest
 
 ## 📜 License
 
-InformaNu is protected under the [MIT License](https://choosealicense.com/licenses/mit/). For more details, refer to the [LICENSE](LICENSE) file.
+InformaNu is licensed under the **Apache License 2.0**. See the [`LICENSE`](./LICENSE) file for details.
 
 ---
 
