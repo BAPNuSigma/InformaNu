@@ -17,12 +17,10 @@
 
 <em>Built with the tools and technologies:</em>
 
-<img src="https://img.shields.io/badge/Markdown-000000.svg?style=flat&logo=Markdown&logoColor=white" alt="Markdown">
-<img src="https://img.shields.io/badge/Streamlit-FF4B4B.svg?style=flat&logo=Streamlit&logoColor=white" alt="Streamlit">
-<img src="https://img.shields.io/badge/LangChain-1C3C3C.svg?style=flat&logo=LangChain&logoColor=white" alt="LangChain">
-<img src="https://img.shields.io/badge/Python-3776AB.svg?style=flat&logo=Python&logoColor=white" alt="Python">
+<img src="https://img.shields.io/badge/TypeScript-3178C6.svg?style=flat&logo=TypeScript&logoColor=white" alt="TypeScript">
+<img src="https://img.shields.io/badge/Next.js-000000.svg?style=flat&logo=Next.js&logoColor=white" alt="Next.js">
 <img src="https://img.shields.io/badge/OpenAI-412991.svg?style=flat&logo=OpenAI&logoColor=white" alt="OpenAI">
-<img src="https://img.shields.io/badge/YAML-CB171E.svg?style=flat&logo=YAML&logoColor=white" alt="YAML">
+<img src="https://img.shields.io/badge/React-61DAFB.svg?style=flat&logo=React&logoColor=black" alt="React">
 
 </div>
 <br>
@@ -32,15 +30,13 @@
 ## 📄 Table of Contents
 
 - [Overview](#-overview)
-- [Getting Started](#-getting-started)
-    - [Prerequisites](#-prerequisites)
-    - [Installation](#-installation)
-    - [Local Development](#-local-development)
-    - [Deployment](#-deployment)
-    - [Usage](#-usage)
-- [Features](#-features)
+- [Architecture](#-architecture)
 - [Knowledge Base](#-knowledge-base)
 - [Project Structure](#-project-structure)
+- [Local Development](#-local-development)
+- [Vercel Deployment](#-vercel-deployment)
+- [Legacy Streamlit Deployment](#-legacy-streamlit-deployment)
+- [Testing](#-testing)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -50,149 +46,257 @@
 
 ## ✨ Overview
 
-InformaNu is a comprehensive Q&A chatbot for BAP-NuSigma, leveraging OpenAI and document-based answers. It simplifies creating conversational experiences that are both visually appealing and contextually accurate.
-
-**Why InformaNu?**
-
-This project enables chapter members to rapidly access information about policies, requirements, and schedules through an intelligent chatbot interface. The core features include:
-
-- **🧩** **Styled Chat Templates:** Standardized HTML and CSS for visually distinct user and bot messages, ensuring a cohesive conversational UI.
-- **🚀** **Cloud Deployment Configuration:** Streamlined setup with YAML files to deploy your chatbot seamlessly in cloud environments.
-- **🤖** **AI-Powered Q&A:** Integration with OpenAI GPT-3.5 for dynamic, context-aware responses based on knowledge base content.
-- **📄** **Document Processing:** Efficiently loads and indexes PDFs, Word documents, and Markdown files for accurate information retrieval.
-- **🔧** **Dependency Management:** Ensures smooth setup with a dedicated requirements file for all necessary libraries.
-- **🤝** **Collaborative Development:** Clear ownership and contribution guidelines to foster effective teamwork.
+InformaNu is a Q&A chatbot for the Beta Alpha Psi Nu Sigma chapter. It answers
+chapter-related questions using only the committed knowledge base and the
+OpenAI API. The public Vercel deployment runs a **Next.js App Router** frontend
+that talks to a server-side API route. The OpenAI API key never reaches the
+browser.
 
 ---
 
-## 📌 Features
+## 🏗️ Architecture
 
-|      | Component       | Details                                                                                     |
-| :--- | :-------------- | :------------------------------------------------------------------------------------------ |
-| ⚙️  | **Architecture**  | <ul><li>Modular design separating data ingestion, processing, and UI layers</li><li>Utilizes a pipeline approach with LangChain for chaining components</li></ul> |
-| 🔩 | **Code Quality**  | <ul><li>Follows PEP8 standards</li><li>Uses type hints extensively</li><li>Includes docstrings for major modules</li></ul> |
-| 📄 | **Documentation** | <ul><li>Comprehensive README with setup, usage, and architecture overview</li><li>Includes inline comments and docstrings</li></ul> |
-| 🔌 | **Integrations**  | <ul><li>OpenAI API for LLM functionalities</li><li>FAISS for vector similarity search</li><li>PyPDF2 and python-docx for document parsing</li><li>Streamlit for web interface</li></ul> |
-| 🧩 | **Modularity**    | <ul><li>Separated modules for document ingestion, embedding, and querying</li><li>Configurable via YAML (`render.yaml`)</li></ul> |
-| 🧪 | **Testing**       | <ul><li>Basic unit tests present in `/tests` directory</li><li>Uses pytest framework</li></ul> |
-| ⚡️  | **Performance**   | <ul><li>Leverages FAISS for fast similarity search</li><li>Asynchronous API calls for OpenAI</li></ul> |
-| 🛡️ | **Security**      | <ul><li>API keys managed via environment variables (`python-dotenv`)</li><li>Minimal attack surface, no exposed endpoints</li></ul> |
-| 📦 | **Dependencies**  | <ul><li>Managed via `requirements.txt`</li><li>Includes core libraries: `python`, `faiss-cpu`, `openai`, `langchain`, `streamlit`, `PyPDF2`, `python-docx`, `tiktoken`</li></ul> |
+- **Frontend:** Next.js 15 App Router + React 19 + TypeScript.
+- **Styling:** Plain CSS modules (`src/app/globals.css`).
+- **Chat API:** `POST /api/chat` — server-side route using the official OpenAI
+  Node SDK with the **Responses API**.
+- **Knowledge base:** Source documents live in `knowledge_base/`. A development
+  script (`npm run generate:knowledge`) extracts them into
+  `src/data/knowledge-base.json`, which is imported by the API route at build
+  time. Documents are **not** parsed on every request.
+- **State:** Chat history is held in React client-side state. No database is used.
+- **Secrets:** `OPENAI_API_KEY` is read only inside `src/lib/openai.ts` and the
+  `/api/chat` route.
 
 ---
 
 ## 📚 Knowledge Base
 
-The bot is trained on the following documents:
-- **BAP National Policies** - Comprehensive national organization policies
-- **Candidate Requirements** - Requirements for chapter candidates
-- **Member Requirements** - Requirements for active members
-- **Membership Types and Requirements** - Different membership categories and their requirements
-- **Officer Roles** - Responsibilities and roles of chapter officers
-- **Social Media Policy** - Guidelines for social media usage
-- **Spring 2025 Schedule** - Upcoming events and meetings schedule
+The bot is grounded in the following committed documents:
+
+- **BAP National Policies**
+- **Candidate Requirements**
+- **Member Requirements**
+- **Membership Types and Requirements**
+- **Officer Roles**
+- **Social Media Policy**
+- **Spring 2026 Schedule**
+
+To regenerate the extracted artifact after editing source documents:
+
+```sh
+npm run generate:knowledge
+```
+
+The script reports any extraction failures and writes the deterministic artifact
+to `src/data/knowledge-base.json`.
 
 ---
 
 ## 📁 Project Structure
 
 ```sh
-└── InformaNu/
-    ├── .github
-    │   └── CODEOWNERS
-    ├── LICENSE
-    ├── README.md
-    ├── htmlTemplates.py
-    ├── knowledge_base
-    │   ├── BAP-National-Policies.pdf
-    │   ├── Candidate Requirements.docx
-    │   ├── Member Requirements.docx
-    │   ├── Membership Types and Requirements.docx
-    │   ├── Officer Roles.docx
-    │   ├── beta-alpha-psi-social-media-policy-2020_final.pdf
-    │   └── spring_2025_schedule.md
-    ├── render.yaml
-    ├── requirements.txt
-    └── streamlit_app.py
+InformaNu/
+├── .github
+│   └── CODEOWNERS
+├── knowledge_base/           # Source PDF, DOCX, and Markdown documents
+├── scripts/
+│   └── generate-knowledge-base.py   # Build-time extraction script
+├── src/
+│   ├── app/
+│   │   ├── api/chat/route.ts        # Server-side OpenAI streaming route
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── components/
+│   │   ├── Chat.tsx
+│   │   └── ChatMessage.tsx
+│   ├── data/
+│   │   └── knowledge-base.json      # Generated text artifact
+│   └── lib/
+│       ├── config.ts
+│       ├── knowledge.ts
+│       ├── openai.ts
+│       └── validation.ts
+├── .env.example
+├── .gitignore
+├── .nvmrc
+├── LICENSE
+├── README.md
+├── htmlTemplates.py          # Legacy Streamlit assets
+├── next.config.ts
+├── package.json
+├── package-lock.json
+├── render.yaml               # Legacy Render deployment config
+├── requirements.txt          # Legacy Python dependencies
+├── streamlit_app.py          # Legacy Streamlit application
+└── tsconfig.json
 ```
 
 ---
 
-## 🚀 Getting Started
+## 💻 Local Development
 
-### 📋 Prerequisites
+### Prerequisites
 
-This project requires the following dependencies:
+- Node.js `20.x` (use `.nvmrc` or `nvm use`)
+- An OpenAI API key
 
-- **Programming Language:** Python 3.8+
-- **Package Manager:** Pip
-- **OpenAI API Key:** Required for AI functionality
-
-### ⚙️ Installation
-
-Build InformaNu from the source and install dependencies:
-
-1. **Clone the repository:**
-
-    ```sh
-    ❯ git clone https://github.com/BAPNuSigma/InformaNu
-    ```
-
-2. **Navigate to the project directory:**
-
-    ```sh
-    ❯ cd InformaNu
-    ```
-
-3. **Install the dependencies:**
-
-**Using [pip](https://pypi.org/project/pip/):**
+### Installation
 
 ```sh
-❯ pip install -r requirements.txt
+npm install
 ```
 
-### 💻 Local Development
+Copy the example environment file and add your OpenAI key:
 
-1. **Set Up Secrets**
-   Create a file at `.streamlit/secrets.toml` with the following structure:
-   ```toml
-   [openai]
-   api_key = "your-openai-api-key"
-   ```
+```sh
+cp .env.example .env.local
+```
 
-2. **Run the App**
-   ```sh
-   ❯ streamlit run streamlit_app.py
-   ```
+Edit `.env.local`:
 
-### ☁️ Deployment on Render
+```sh
+OPENAI_API_KEY=sk-...
+# Optional: OPENAI_MODEL=gpt-4o-mini
+```
 
-1. **Push your code to GitHub**
-2. **Create a new Web Service on [Render](https://render.com/)**
-3. **Set Environment Variables** in the Render dashboard:
-   - `OPENAI_API_KEY`: Your OpenAI API key
-4. **Deploy!**
+> Do **not** commit `.env.local` or any file containing secrets.
 
-The app will automatically use environment variables in production and `secrets.toml` locally.
+### Run the development server
 
-### 🎯 Usage
+```sh
+npm run dev
+```
 
-- Ask questions about your chapter or national policies
-- The bot will answer using only the information in the indexed documents
-- If the answer is not found, the bot will say so
-- The bot maintains context of the conversation for more natural interactions
+Open [http://localhost:3000](http://localhost:3000).
+
+### Set up the Python extraction environment (for knowledge-base regeneration)
+
+The knowledge-base source documents are PDF and DOCX files. A Python script
+extracts them into `src/data/knowledge-base.json`. Create a local Python virtual
+environment once:
+
+```sh
+python3 -m venv .venv-py
+source .venv-py/bin/activate
+pip install -r requirements.txt
+```
+
+### Regenerate the knowledge-base artifact
+
+```sh
+npm run generate:knowledge
+```
+
+---
+
+## 🚀 Vercel Deployment
+
+### Required Vercel Project Settings
+
+| Setting | Value |
+| --- | --- |
+| **Root directory** | `./` (repository root) |
+| **Framework preset** | Next.js |
+| **Build command** | `next build` |
+| **Install command** | `npm install` |
+| **Output directory** | default (`.next`) |
+| **Node.js version** | `22.x` (from `package.json` `engines` or `.nvmrc`) |
+
+### Required Environment Variables
+
+Add these in the Vercel dashboard under **Project Settings → Environment Variables**:
+
+| Name | Required | Value |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Yes | Your OpenAI API key |
+| `OPENAI_MODEL` | No | Any OpenAI model ID. Defaults to `gpt-4o-mini`. |
+
+### Deployment Steps
+
+1. Push the repository to GitHub.
+2. Import the project into Vercel.
+3. Confirm the framework preset is **Next.js**.
+4. Add `OPENAI_API_KEY` in the environment variables.
+5. Deploy.
+6. Verify that the chat page loads and responds to a question.
+
+### Manual Verification Checklist
+
+- [ ] Homepage loads at the Vercel URL.
+- [ ] A welcome message and chat input are visible.
+- [ ] Submitting a question returns a streaming assistant response.
+- [ ] Responses reference chapter-specific information from the knowledge base.
+- [ ] Submitting an unrelated question yields the “I don’t have that information” behavior.
+- [ ] No `OPENAI_API_KEY` is exposed in browser dev tools or network traffic.
+
+---
+
+## 🛡️ Production Security
+
+The public `/api/chat` endpoint streams responses from the OpenAI API and is
+therefore a candidate for accidental abuse. Protect it **after** the initial
+Vercel deployment using only Vercel-native controls (no Redis, database, or
+third-party service is required):
+
+| Control | Recommendation |
+| --- | --- |
+| **Vercel WAF rate limiting** | Create a rule scoped to `POST /api/chat` that allows **10 requests per minute per source IP**. Return `429 Too Many Requests` for excess traffic. |
+| **Vercel Bot Protection** | Enable **Challenge mode** so automated bots must pass a challenge before reaching the endpoint. |
+
+These settings are configured in the Vercel dashboard under the project’s
+**Security** tab. Adjust the rate limit once you have real traffic data.
+
+---
+
+## 🖥️ Legacy Streamlit Deployment
+
+The original Render/Streamlit implementation is intentionally preserved as a
+rollback path while the Vercel deployment is being verified.
+
+Legacy files:
+
+- `streamlit_app.py`
+- `htmlTemplates.py`
+- `requirements.txt`
+- `render.yaml`
+
+To deploy on Render, create a Python web service and set the `OPENAI_API_KEY`
+environment variable. The start command in `render.yaml` is:
+
+```sh
+streamlit run streamlit_app.py --server.port $PORT
+```
+
+Do not delete these files until the Vercel deployment is tested and approved.
 
 ---
 
 ## 🧪 Testing
 
-InformaNu uses the pytest test framework. Run the test suite with:
-
-**Using [pip](https://pypi.org/project/pip/):**
+Run the validation and knowledge-base tests:
 
 ```sh
-pytest
+npm test
+```
+
+Run TypeScript checks:
+
+```sh
+npm run typecheck
+```
+
+Run ESLint:
+
+```sh
+npm run lint
+```
+
+Run the production build:
+
+```sh
+npm run build
 ```
 
 ---
@@ -200,65 +304,11 @@ pytest
 ## 🔧 Troubleshooting
 
 | Issue | Solution |
-|-------|----------|
-| **No secrets file found** | Make sure you have `.streamlit/secrets.toml` locally, or environment variables set on Render |
-| **No documents found** | Check if the knowledge_base directory contains the required documents |
-| **API Key Issues** | Verify your OpenAI API key is correctly set in secrets or environment variables |
-| **ModuleNotFoundError: No module named 'docx'** | Ensure `python-docx` is installed: `pip install python-docx` |
-| **Build cache issues on Render** | Use "Clear build cache & deploy" option in Render dashboard |
-
----
-
-## 📈 Roadmap
-
-- [X] **`Task 1`**: <strike>Implement basic Q&A functionality.</strike>
-- [X] **`Task 2`**: <strike>Add document processing capabilities.</strike>
-- [X] **`Task 3`**: <strike>Deploy to cloud platform.</strike>
-- [ ] **`Task 4`**: Implement advanced conversation features.
-- [ ] **`Task 5`**: Add multi-language support.
-
----
-
-## 🤝 Contributing
-
-- **💬 [Join the Discussions](https://github.com/BAPNuSigma/InformaNu/discussions)**: Share your insights, provide feedback, or ask questions.
-- **🐛 [Report Issues](https://github.com/BAPNuSigma/InformaNu/issues)**: Submit bugs found or log feature requests for the `InformaNu` project.
-- **💡 [Submit Pull Requests](https://github.com/BAPNuSigma/InformaNu/blob/main/CONTRIBUTING.md)**: Review open PRs, and submit your own PRs.
-
-<details closed>
-<summary>Contributing Guidelines</summary>
-
-1. **Fork the Repository**: Start by forking the project repository to your github account.
-2. **Clone Locally**: Clone the forked repository to your local machine using a git client.
-   ```sh
-   git clone https://github.com/BAPNuSigma/InformaNu
-   ```
-3. **Create a New Branch**: Always work on a new branch, giving it a descriptive name.
-   ```sh
-   git checkout -b new-feature-x
-   ```
-4. **Make Your Changes**: Develop and test your changes locally.
-5. **Commit Your Changes**: Commit with a clear message describing your updates.
-   ```sh
-   git commit -m 'Implemented new feature x.'
-   ```
-6. **Push to github**: Push the changes to your forked repository.
-   ```sh
-   git push origin new-feature-x
-   ```
-7. **Submit a Pull Request**: Create a PR against the original project repository. Clearly describe the changes and their motivations.
-8. **Review**: Once your PR is reviewed and approved, it will be merged into the main branch. Congratulations on your contribution!
-</details>
-
-<details closed>
-<summary>Contributor Graph</summary>
-<br>
-<p align="left">
-   <a href="https://github.com{/BAPNuSigma/InformaNu/}graphs/contributors">
-      <img src="https://contrib.rocks/image?repo=BAPNuSigma/InformaNu">
-   </a>
-</p>
-</details>
+| --- | --- |
+| `OPENAI_API_KEY` errors | Ensure the key is set in `.env.local` locally or in Vercel project settings. |
+| No responses from the bot | Check the Vercel function logs for OpenAI errors. |
+| Knowledge base appears empty | Run `npm run generate:knowledge` and verify `src/data/knowledge-base.json` was generated. |
+| `npm install` engine warnings | Use Node `22.x` (via `nvm` or `fnm`) or ignore the local warning; Vercel uses the `engines` value. |
 
 ---
 
@@ -272,12 +322,10 @@ InformaNu is licensed under the **Apache License 2.0**. See the [`LICENSE`](./LI
 
 - **Jack Mitchell** - For becoming the Founding Father and Creator of InformaNu
 - **Beta Alpha Psi Nu Sigma Chapter** - For providing the knowledge base and requirements
-- **OpenAI** - For providing the GPT-3.5 API
-- **Streamlit** - For the web framework
-- **LangChain** - For the AI/ML framework
+- **OpenAI** - For providing the GPT models
+- **Next.js / Vercel** - For the hosting and React framework
 - **Contributors** - All those who have contributed to this project
 
 <div align="left"><a href="#top">⬆ Return</a></div>
 
 ---
-
